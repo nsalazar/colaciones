@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#F1F4EC">
+<meta name="theme-color" content="#F3F6F1">
 <title>Colación compartida</title>
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -17,7 +17,15 @@
 <main class="wrap">
 
   <header class="head">
-    <h1 id="curso">Colación compartida</h1>
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M24 4C15 10 10 18 10 26c0 8 6 14 14 14s14-6 14-14c0-8-5-16-14-22Z" fill="none" stroke="var(--teal)" stroke-width="2.4"/>
+        <path d="M24 10c-5 5-8 11-8 16 0 5.2 3.6 9 8 9" fill="none" stroke="var(--teal)" stroke-width="2" opacity=".55"/>
+        <path d="M24 15v25" stroke="var(--teal)" stroke-width="2" opacity=".55"/>
+      </svg>
+      <p class="eyebrow" id="curso">Curso</p>
+    </div>
+    <h1>Colación compartida</h1>
     <p class="sub" id="hoy"></p>
   </header>
 
@@ -26,18 +34,30 @@
     <p class="mine-meal" id="mineMeal"></p>
   </section>
 
-  <nav class="weeknav">
-    <button type="button" id="prev" class="stepper" aria-label="Semana anterior">‹</button>
-    <p class="weeklabel" id="weeklabel"></p>
-    <button type="button" id="next" class="stepper" aria-label="Semana siguiente">›</button>
+  <nav class="monthnav">
+    <button type="button" id="prev" class="stepper" aria-label="Mes anterior">‹</button>
+    <p class="monthlabel" id="monthlabel"></p>
+    <button type="button" id="next" class="stepper" aria-label="Mes siguiente">›</button>
   </nav>
 
-  <ol class="days" id="days"></ol>
+  <div class="cal-scroll">
+    <table class="cal">
+      <thead>
+        <tr id="legend"></tr>
+      </thead>
+      <tbody id="calBody"></tbody>
+    </table>
+  </div>
 
   <div class="rowbtns">
-    <button type="button" id="today" class="ghost">Volver a esta semana</button>
-    <button type="button" id="share" class="ghost">Compartir la semana</button>
+    <button type="button" id="today" class="ghost">Volver a este mes</button>
+    <button type="button" id="share" class="ghost">Compartir el mes</button>
   </div>
+
+  <section class="month-events" id="monthEvents" hidden>
+    <h2>Este mes</h2>
+    <ul id="monthEventsList"></ul>
+  </section>
 
   <section class="avisos">
     <h2>Avisos</h2>

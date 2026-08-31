@@ -14,7 +14,7 @@ const state = {
   index: new Map(),
   closures: new Map(),
   events: new Map(),
-  anchor: null,
+  anchor: null, // first day of the displayed month
   myKid: null
 };
 
@@ -42,8 +42,20 @@ function mondayOf(d) {
   return addDays(c, -shift);
 }
 
+function firstOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function lastOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+
 function longDate(d) {
   return `${d.getDate()} de ${MONTHS[d.getMonth()]}`;
+}
+
+function capitalize(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 /* ---------- rotation ---------- */
@@ -132,93 +144,130 @@ function nextTurnFor(kid, from) {
 
 /* ---------- render ---------- */
 
-function renderWeek() {
-  const list = document.getElementById("days");
-  const todayISO = toISO(new Date());
-  list.innerHTML = "";
-
-  const monday = state.anchor;
-  const friday = addDays(monday, 4);
-  document.getElementById("weeklabel").textContent =
-    `${monday.getDate()} al ${friday.getDate()} de ${MONTHS[friday.getMonth()]}`;
-
-  for (let i = 0; i < 5; i++) {
-    const d = addDays(monday, i);
-    const iso = toISO(d);
-    const entry = state.index.get(iso);
-
-    const closure = state.closures.get(iso);
-
-    const li = document.createElement("li");
-    li.className = "day";
-    if (iso === todayISO) li.classList.add("today");
-    if (!entry) li.classList.add("off");
-    if (closure && closure.type === "sinColacion") li.classList.add("nofood");
-    if (entry && state.myKid && entry.kid === state.myKid) li.classList.add("mine-day");
-
-    const when = document.createElement("div");
-    when.className = "day-when";
-    when.innerHTML =
-      `<span class="day-dow">${DOW_SHORT[i + 1]}</span>` +
-      `<span class="day-num">${d.getDate()}</span>`;
-
-    const body = document.createElement("div");
-    if (entry) {
-      const meal = document.createElement("p");
-      meal.className = "day-meal";
-      meal.textContent = entry.meal;
-      if (entry.swapped) {
-        const tag = document.createElement("span");
-        tag.className = "tag";
-        tag.textContent = entry.note;
-        meal.appendChild(tag);
-      }
-      const kid = document.createElement("p");
-      kid.className = "day-kid";
-      kid.textContent = entry.kid;
-      body.append(meal, kid);
-    } else {
-      const off = document.createElement("p");
-      off.className = "day-meal";
-      if (closure && closure.type === "sinColacion") {
-        off.textContent = "No enviar colación";
-      } else if (closure) {
-        off.textContent = "Sin clases";
-      } else {
-        off.textContent = "Sin colación";
-      }
-      body.append(off);
-
-      if (closure && closure.reason) {
-        const why = document.createElement("p");
-        why.className = "day-kid";
-        why.textContent = closure.reason;
-        body.append(why);
-      }
-    }
-
-    li.append(when, body);
-
-    for (const ev of state.events.get(iso) || []) {
-      const box = document.createElement("p");
-      box.className = "event";
-      if (involves(ev, state.myKid)) box.classList.add("event-mine");
-      const who = Array.isArray(ev.audience) ? "algunos apoderados" : "todo el curso";
-      const bits = [ev.title];
-      if (ev.time) bits.push(ev.time);
-      bits.push(who);
-      box.textContent = bits.join(" · ");
-      if (ev.place || ev.note) {
-        const extra = document.createElement("span");
-        extra.className = "event-note";
-        extra.textContent = ev.place || ev.note;
-        box.append(document.createElement("br"), extra);
-      }
-      body.append(box);
-    }
-
-    list.append(li);
+function renderLegend() {
+  const row = document.getElementById("legend");
+  row.innerHTML = "";
+  for (let i = 1; i <= 5; i++) {
+    const th = document.createElement("th");
+    const meal = state.cfg.weekdays[String(i)] || "";
+    th.innerHTML = `<span class="legend-dow"></span><span class="legend-meal"></span>`;
+    th.querySelector(".legend-dow").textContent = DOW_SHORT[i];
+    th.querySelector(".legend-meal").textContent = meal;
+    row.append(th);
   }
+}
+
+function dayCellContent(d, inMonth) {
+  const td = document.createElement("td");
+  if (!inMonth) {
+    td.className = "empty";
+    return td;
+  }
+
+  const iso = toISO(d);
+  const todayISO = toISO(new Date());
+  const entry = state.index.get(iso);
+  const closure = state.closures.get(iso);
+  const dayEvents = state.events.get(iso) || [];
+
+  td.className = "cell";
+  if (iso === todayISO) td.classList.add("today");
+  if (!entry) td.classList.add("off");
+  if (closure && closure.type === "sinColacion") td.classList.add("nofood");
+  if (closure && closure.type === "sinClases") td.classList.add("closed");
+  if (entry && state.myKid && entry.kid === state.myKid) td.classList.add("mine-day");
+  if (dayEvents.length) td.classList.add("has-event");
+
+  const num = document.createElement("span");
+  num.className = "cell-num";
+  num.textContent = d.getDate();
+  td.append(num);
+
+  if (entry) {
+    const kid = document.createElement("span");
+    kid.className = "cell-kid";
+    kid.textContent = entry.kid;
+    td.append(kid);
+    if (entry.swapped) {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = entry.note;
+      td.append(tag);
+    }
+  } else if (closure) {
+    const label = document.createElement("span");
+    label.className = "cell-closure";
+    label.textContent = closure.type === "sinColacion" ? "Sin colación" : closure.reason || "Sin clases";
+    td.append(label);
+  }
+
+  if (dayEvents.length) {
+    const dot = document.createElement("span");
+    dot.className = "cell-dot";
+    dot.setAttribute("aria-hidden", "true");
+    td.append(dot);
+  }
+
+  return td;
+}
+
+function renderMonth() {
+  const body = document.getElementById("calBody");
+  body.innerHTML = "";
+
+  const start = firstOfMonth(state.anchor);
+  const end = lastOfMonth(state.anchor);
+  document.getElementById("monthlabel").textContent =
+    capitalize(`${MONTHS[start.getMonth()]} ${start.getFullYear()}`);
+
+  let cursor = mondayOf(start);
+  while (cursor <= end) {
+    const tr = document.createElement("tr");
+    for (let i = 0; i < 5; i++) {
+      const d = addDays(cursor, i);
+      const inMonth = d.getMonth() === start.getMonth();
+      tr.append(dayCellContent(d, inMonth));
+    }
+    body.append(tr);
+    cursor = addDays(cursor, 7);
+  }
+
+  renderMonthEvents(start, end);
+}
+
+function renderMonthEvents(start, end) {
+  const box = document.getElementById("monthEvents");
+  const ul = document.getElementById("monthEventsList");
+  ul.innerHTML = "";
+
+  const items = [];
+  for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
+    const iso = toISO(d);
+    for (const ev of state.events.get(iso) || []) {
+      items.push({ date: new Date(d), ev });
+    }
+  }
+
+  if (!items.length) { box.hidden = true; return; }
+
+  for (const { date, ev } of items) {
+    const li = document.createElement("li");
+    li.className = "event";
+    if (involves(ev, state.myKid)) li.classList.add("event-mine");
+    const who = Array.isArray(ev.audience) ? "algunos apoderados" : "todo el curso";
+    const bits = [`${DOW[((date.getDay() + 6) % 7) + 1]} ${date.getDate()}`, ev.title];
+    if (ev.time) bits.push(ev.time);
+    bits.push(who);
+    li.textContent = bits.join(" · ");
+    if (ev.place || ev.note) {
+      const extra = document.createElement("span");
+      extra.className = "event-note";
+      extra.textContent = ev.place || ev.note;
+      li.append(document.createElement("br"), extra);
+    }
+    ul.append(li);
+  }
+  box.hidden = false;
 }
 
 function renderMine() {
@@ -274,24 +323,26 @@ function renderPicker() {
       else localStorage.removeItem(STORE_KEY);
     } catch (e) { /* modo privado */ }
     renderMine();
-    renderWeek();
+    renderMonth();
   });
 }
 
-function weekText() {
-  const monday = state.anchor;
-  const lines = [`Colación ${state.cfg.curso} — semana del ${longDate(monday)}`];
-  for (let i = 0; i < 5; i++) {
-    const d = addDays(monday, i);
+function monthText() {
+  const start = firstOfMonth(state.anchor);
+  const end = lastOfMonth(state.anchor);
+  const lines = [`Colación ${state.cfg.curso} — ${capitalize(MONTHS[start.getMonth()])} ${start.getFullYear()}`];
+  for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
+    const dow = d.getDay();
+    if (dow === 0 || dow === 6) continue;
     const iso = toISO(d);
     const e = state.index.get(iso);
     const c = state.closures.get(iso);
     let detail;
-    if (e) detail = `${e.meal} — ${e.kid}`;
-    else if (c && c.type === "sinColacion") detail = `no enviar colación (${c.reason})`;
-    else if (c) detail = `sin clases (${c.reason})`;
+    if (e) detail = `${e.kid}`;
+    else if (c && c.type === "sinColacion") detail = `sin colación (${c.reason})`;
+    else if (c) detail = c.reason || "sin clases";
     else detail = "sin colación";
-    lines.push(`${DOW[i + 1]} ${d.getDate()}: ${detail}`);
+    lines.push(`${DOW_SHORT[((dow + 6) % 7) + 1]} ${d.getDate()}: ${detail}`);
     for (const ev of state.events.get(iso) || []) {
       lines.push(`   ${ev.title}${ev.time ? " " + ev.time : ""}`);
     }
@@ -313,35 +364,39 @@ async function boot() {
     state.closures = expandClosures(cfg.closures);
     state.events = expandEvents(cfg.events);
     state.index = buildIndex(cfg, state.closures);
-    state.anchor = mondayOf(new Date());
+    state.anchor = firstOfMonth(new Date());
     try { state.myKid = localStorage.getItem(STORE_KEY); } catch (e) { state.myKid = null; }
 
-    document.getElementById("curso").textContent = `Colación ${cfg.curso}`;
+    document.getElementById("curso").textContent = cfg.curso;
     const now = new Date();
     document.getElementById("hoy").textContent =
       `Hoy es ${longDate(now)}`;
 
+    renderLegend();
     renderPicker();
     renderMine();
     renderAvisos();
-    renderWeek();
+    renderMonth();
 
     document.getElementById("prev").addEventListener("click", () => {
-      state.anchor = addDays(state.anchor, -7); renderWeek();
+      state.anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth() - 1, 1);
+      renderMonth();
     });
     document.getElementById("next").addEventListener("click", () => {
-      state.anchor = addDays(state.anchor, 7); renderWeek();
+      state.anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth() + 1, 1);
+      renderMonth();
     });
     document.getElementById("today").addEventListener("click", () => {
-      state.anchor = mondayOf(new Date()); renderWeek();
+      state.anchor = firstOfMonth(new Date());
+      renderMonth();
     });
     document.getElementById("share").addEventListener("click", async () => {
-      const text = weekText();
+      const text = monthText();
       if (navigator.share) {
         try { await navigator.share({ text }); } catch (e) { /* cancelado */ }
       } else {
         await navigator.clipboard.writeText(text);
-        alert("Semana copiada. Pégala en el grupo.");
+        alert("Mes copiado. Pégalo en el grupo.");
       }
     });
   } catch (err) {
