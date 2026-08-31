@@ -17,16 +17,23 @@
 <main class="wrap">
 
   <header class="head">
-    <div class="brand">
-      <svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
-        <path d="M24 4C15 10 10 18 10 26c0 8 6 14 14 14s14-6 14-14c0-8-5-16-14-22Z" fill="none" stroke="var(--teal)" stroke-width="2.4"/>
-        <path d="M24 10c-5 5-8 11-8 16 0 5.2 3.6 9 8 9" fill="none" stroke="var(--teal)" stroke-width="2" opacity=".55"/>
-        <path d="M24 15v25" stroke="var(--teal)" stroke-width="2" opacity=".55"/>
-      </svg>
-      <p class="eyebrow" id="curso">Curso</p>
+    <div class="head-text">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M24 4C15 10 10 18 10 26c0 8 6 14 14 14s14-6 14-14c0-8-5-16-14-22Z" fill="none" stroke="var(--teal)" stroke-width="2.4"/>
+          <path d="M24 10c-5 5-8 11-8 16 0 5.2 3.6 9 8 9" fill="none" stroke="var(--teal)" stroke-width="2" opacity=".55"/>
+          <path d="M24 15v25" stroke="var(--teal)" stroke-width="2" opacity=".55"/>
+        </svg>
+        <p class="eyebrow" id="curso">Curso</p>
+      </div>
+      <h1>Colación compartida</h1>
+      <p class="sub" id="hoy"></p>
     </div>
-    <h1>Colación compartida</h1>
-    <p class="sub" id="hoy"></p>
+    <div class="kid-picker-mini">
+      <select id="kidSelect" title="Se guarda solo en este teléfono, para destacar el turno de tu hijo o hija en el calendario.">
+        <option value="">Mi hijo/a…</option>
+      </select>
+    </div>
   </header>
 
   <section class="mine" id="mine" hidden>
@@ -40,36 +47,44 @@
     <button type="button" id="next" class="stepper" aria-label="Mes siguiente">›</button>
   </nav>
 
-  <div class="cal-scroll">
-    <table class="cal">
-      <thead>
-        <tr id="legend"></tr>
-      </thead>
-      <tbody id="calBody"></tbody>
-    </table>
-  </div>
+  <table class="cal">
+    <thead>
+      <tr id="legend"></tr>
+    </thead>
+    <tbody id="calBody"></tbody>
+  </table>
 
   <div class="rowbtns">
-    <button type="button" id="today" class="ghost">Volver a este mes</button>
-    <button type="button" id="share" class="ghost">Compartir el mes</button>
+    <button type="button" id="today" class="ghost">
+      <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+        <line x1="16" y1="2" x2="16" y2="6"></line>
+        <line x1="8" y1="2" x2="8" y2="6"></line>
+        <line x1="3" y1="10" x2="21" y2="10"></line>
+        <circle cx="12" cy="16" r="2" fill="currentColor" stroke="none"></circle>
+      </svg>
+      Volver a hoy
+    </button>
+    <button type="button" id="share" class="ghost">
+      <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="18" cy="5" r="3"></circle>
+        <circle cx="6" cy="12" r="3"></circle>
+        <circle cx="18" cy="19" r="3"></circle>
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+      </svg>
+      Compartir el mes
+    </button>
   </div>
 
   <section class="month-events" id="monthEvents" hidden>
-    <h2>Este mes</h2>
+    <h2>Próximos eventos</h2>
     <ul id="monthEventsList"></ul>
   </section>
 
   <section class="avisos">
     <h2>Avisos</h2>
     <ul id="avisos"></ul>
-  </section>
-
-  <section class="picker">
-    <label for="kidSelect">¿Quién es tu hijo o hija?</label>
-    <p class="hint">Se guarda solo en este teléfono, para avisarte cuándo te toca.</p>
-    <select id="kidSelect">
-      <option value="">Elegir…</option>
-    </select>
   </section>
 
   <p class="err" id="err" hidden></p>

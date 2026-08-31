@@ -1,7 +1,7 @@
 "use strict";
 
-const DOW = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
-const DOW_SHORT = ["", "Lun", "Mar", "Mié", "Jue", "Vie"];
+const DOW = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+const DOW_SHORT = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
@@ -14,6 +14,7 @@ const state = {
   index: new Map(),
   closures: new Map(),
   events: new Map(),
+  attachments: new Map(),
   anchor: null, // first day of the displayed month
   myKid: null
 };
@@ -99,6 +100,15 @@ function expandEvents(list) {
   return map;
 }
 
+function expandAttachments(list) {
+  const map = new Map();
+  for (const a of list || []) {
+    if (!map.has(a.date)) map.set(a.date, []);
+    map.get(a.date).push(a);
+  }
+  return map;
+}
+
 function involves(ev, kid) {
   if (!kid) return false;
   if (ev.audience === "todos" || !ev.audience) return true;
@@ -122,12 +132,19 @@ function buildIndex(cfg, closures) {
     cursor = addDays(cursor, 1);
   }
 
+  for (const h of cfg.history || []) {
+    const meal = cfg.weekdays[String(parseDate(h.date).getDay())];
+    if (meal) map.set(h.date, { meal, kid: h.kid });
+  }
+
   for (const o of cfg.overrides || []) {
     const entry = map.get(o.date);
     if (entry) {
       entry.kid = o.kid;
-      entry.note = o.note || "cambio";
-      entry.swapped = true;
+      if (o.note) {
+        entry.note = o.note;
+        entry.swapped = true;
+      }
     }
   }
   return map;
@@ -144,17 +161,65 @@ function nextTurnFor(kid, from) {
 
 /* ---------- render ---------- */
 
+function shortMeal(text) {
+  return text.split(" (")[0].trim();
+}
+
 function renderLegend() {
   const row = document.getElementById("legend");
   row.innerHTML = "";
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= 7; i++) {
     const th = document.createElement("th");
-    const meal = state.cfg.weekdays[String(i)] || "";
-    th.innerHTML = `<span class="legend-dow"></span><span class="legend-meal"></span>`;
-    th.querySelector(".legend-dow").textContent = DOW_SHORT[i];
-    th.querySelector(".legend-meal").textContent = meal;
+    const isWeekend = i >= 6;
+    const nativeDow = i === 7 ? 0 : i;
+    const meal = state.cfg.weekdays[String(nativeDow)];
+    if (isWeekend) th.classList.add("legend-weekend");
+
+    const dowSpan = document.createElement("span");
+    dowSpan.className = "legend-dow";
+    dowSpan.textContent = DOW_SHORT[i];
+    th.append(dowSpan);
+
+    if (meal) {
+      const mealSpan = document.createElement("span");
+      mealSpan.className = "legend-meal";
+      mealSpan.append(document.createTextNode(shortMeal(meal)));
+
+      if (meal.includes(" (")) {
+        const info = document.createElement("span");
+        info.className = "legend-info";
+        info.tabIndex = 0;
+        info.append(svgIcon(
+          '<circle cx="12" cy="12" r="10"></circle>' +
+          '<line x1="12" y1="16" x2="12" y2="12"></line>' +
+          '<line x1="12" y1="8" x2="12.01" y2="8"></line>'
+        ));
+        const tooltip = document.createElement("span");
+        tooltip.className = "event-tooltip";
+        tooltip.textContent = meal.slice(meal.indexOf("("));
+        info.append(tooltip);
+        mealSpan.append(" ", info);
+      }
+
+      th.append(mealSpan);
+    }
+
     row.append(th);
   }
+}
+
+function svgIcon(innerPaths) {
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  icon.setAttribute("class", "cell-icon");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("fill", "none");
+  icon.setAttribute("stroke", "currentColor");
+  icon.setAttribute("stroke-width", "2");
+  icon.setAttribute("stroke-linecap", "round");
+  icon.setAttribute("stroke-linejoin", "round");
+  icon.setAttribute("aria-hidden", "true");
+  icon.innerHTML = innerPaths;
+  return icon;
 }
 
 function dayCellContent(d, inMonth) {
@@ -166,12 +231,17 @@ function dayCellContent(d, inMonth) {
 
   const iso = toISO(d);
   const todayISO = toISO(new Date());
+  const dow = d.getDay();
+  const isWeekend = dow === 0 || dow === 6;
   const entry = state.index.get(iso);
   const closure = state.closures.get(iso);
   const dayEvents = state.events.get(iso) || [];
+  const dayAttachments = state.attachments.get(iso) || [];
 
   td.className = "cell";
+  if (isWeekend) td.classList.add("weekend");
   if (iso === todayISO) td.classList.add("today");
+  else if (iso < todayISO) td.classList.add("past");
   if (!entry) td.classList.add("off");
   if (closure && closure.type === "sinColacion") td.classList.add("nofood");
   if (closure && closure.type === "sinClases") td.classList.add("closed");
@@ -201,11 +271,52 @@ function dayCellContent(d, inMonth) {
     td.append(label);
   }
 
+  const icons = [];
+
   if (dayEvents.length) {
-    const dot = document.createElement("span");
-    dot.className = "cell-dot";
-    dot.setAttribute("aria-hidden", "true");
-    td.append(dot);
+    const marker = document.createElement("span");
+    marker.className = "event-marker";
+    marker.tabIndex = 0;
+    marker.append(svgIcon(
+      '<rect x="3" y="4" width="18" height="18" rx="2"></rect>' +
+      '<line x1="16" y1="2" x2="16" y2="6"></line>' +
+      '<line x1="8" y1="2" x2="8" y2="6"></line>' +
+      '<line x1="3" y1="10" x2="21" y2="10"></line>'
+    ));
+
+    const tooltip = document.createElement("span");
+    tooltip.className = "event-tooltip";
+    dayEvents.forEach((ev, i) => {
+      if (i > 0) tooltip.append(document.createElement("br"));
+      const bits = ["Evento: " + ev.title];
+      if (ev.time) bits.push(ev.time);
+      tooltip.append(document.createTextNode(bits.join(" · ")));
+    });
+    marker.append(tooltip);
+    icons.push(marker);
+  }
+
+  for (const att of dayAttachments) {
+    const link = document.createElement("a");
+    link.className = "attachment-marker";
+    link.href = encodeURI(att.file);
+    link.download = att.file.split("/").pop();
+    link.append(svgIcon(
+      '<path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>'
+    ));
+
+    const tooltip = document.createElement("span");
+    tooltip.className = "event-tooltip";
+    tooltip.textContent = "Adjunto: " + (att.label || link.download);
+    link.append(tooltip);
+    icons.push(link);
+  }
+
+  if (icons.length) {
+    const row = document.createElement("span");
+    row.className = "cell-icons";
+    row.append(...icons);
+    td.append(row);
   }
 
   return td;
@@ -223,7 +334,7 @@ function renderMonth() {
   let cursor = mondayOf(start);
   while (cursor <= end) {
     const tr = document.createElement("tr");
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 7; i++) {
       const d = addDays(cursor, i);
       const inMonth = d.getMonth() === start.getMonth();
       tr.append(dayCellContent(d, inMonth));
@@ -232,21 +343,23 @@ function renderMonth() {
     cursor = addDays(cursor, 7);
   }
 
-  renderMonthEvents(start, end);
+  const now = firstOfMonth(new Date());
+  document.getElementById("today").disabled =
+    start.getFullYear() === now.getFullYear() && start.getMonth() === now.getMonth();
 }
 
-function renderMonthEvents(start, end) {
+function renderUpcomingEvents() {
   const box = document.getElementById("monthEvents");
   const ul = document.getElementById("monthEventsList");
   ul.innerHTML = "";
 
+  const todayISO = toISO(new Date());
   const items = [];
-  for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
-    const iso = toISO(d);
-    for (const ev of state.events.get(iso) || []) {
-      items.push({ date: new Date(d), ev });
-    }
+  for (const [iso, evs] of state.events) {
+    if (iso < todayISO) continue;
+    for (const ev of evs) items.push({ date: parseDate(iso), ev });
   }
+  items.sort((a, b) => toISO(a.date).localeCompare(toISO(b.date)));
 
   if (!items.length) { box.hidden = true; return; }
 
@@ -254,8 +367,8 @@ function renderMonthEvents(start, end) {
     const li = document.createElement("li");
     li.className = "event";
     if (involves(ev, state.myKid)) li.classList.add("event-mine");
-    const who = Array.isArray(ev.audience) ? "algunos apoderados" : "todo el curso";
-    const bits = [`${DOW[((date.getDay() + 6) % 7) + 1]} ${date.getDate()}`, ev.title];
+    const who = Array.isArray(ev.audience) ? "algunos apoderados" : "Todo el curso";
+    const bits = [`${DOW[((date.getDay() + 6) % 7) + 1]} ${longDate(date)}`, ev.title];
     if (ev.time) bits.push(ev.time);
     bits.push(who);
     li.textContent = bits.join(" · ");
@@ -324,6 +437,7 @@ function renderPicker() {
     } catch (e) { /* modo privado */ }
     renderMine();
     renderMonth();
+    renderUpcomingEvents();
   });
 }
 
@@ -333,17 +447,24 @@ function monthText() {
   const lines = [`Colación ${state.cfg.curso} — ${capitalize(MONTHS[start.getMonth()])} ${start.getFullYear()}`];
   for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
     const dow = d.getDay();
-    if (dow === 0 || dow === 6) continue;
     const iso = toISO(d);
-    const e = state.index.get(iso);
-    const c = state.closures.get(iso);
-    let detail;
-    if (e) detail = `${e.kid}`;
-    else if (c && c.type === "sinColacion") detail = `sin colación (${c.reason})`;
-    else if (c) detail = c.reason || "sin clases";
-    else detail = "sin colación";
-    lines.push(`${DOW_SHORT[((dow + 6) % 7) + 1]} ${d.getDate()}: ${detail}`);
-    for (const ev of state.events.get(iso) || []) {
+    const isWeekend = dow === 0 || dow === 6;
+    const dayEvents = state.events.get(iso) || [];
+
+    if (!isWeekend) {
+      const e = state.index.get(iso);
+      const c = state.closures.get(iso);
+      let detail;
+      if (e) detail = `${e.kid}`;
+      else if (c && c.type === "sinColacion") detail = `sin colación (${c.reason})`;
+      else if (c) detail = c.reason || "sin clases";
+      else detail = "sin colación";
+      lines.push(`${DOW_SHORT[((dow + 6) % 7) + 1]} ${d.getDate()}: ${detail}`);
+    } else if (dayEvents.length) {
+      lines.push(`${DOW_SHORT[((dow + 6) % 7) + 1]} ${d.getDate()}:`);
+    }
+
+    for (const ev of dayEvents) {
       lines.push(`   ${ev.title}${ev.time ? " " + ev.time : ""}`);
     }
   }
@@ -363,6 +484,7 @@ async function boot() {
     state.avisos = avisos;
     state.closures = expandClosures(cfg.closures);
     state.events = expandEvents(cfg.events);
+    state.attachments = expandAttachments(cfg.attachments);
     state.index = buildIndex(cfg, state.closures);
     state.anchor = firstOfMonth(new Date());
     try { state.myKid = localStorage.getItem(STORE_KEY); } catch (e) { state.myKid = null; }
@@ -377,6 +499,7 @@ async function boot() {
     renderMine();
     renderAvisos();
     renderMonth();
+    renderUpcomingEvents();
 
     document.getElementById("prev").addEventListener("click", () => {
       state.anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth() - 1, 1);

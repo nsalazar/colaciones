@@ -1,6 +1,6 @@
 {
   "curso": "Casa de Niños 1",
-  "rotationStart": "2026-09-01",
+  "rotationStart": "2026-10-01",
   "weekdays": {
     "1": "Yogurt con cereal o granola",
     "2": "Pan a gusto con algo para untar o rellenar (mermelada, jamón, palta, queso, etc)",
@@ -9,8 +9,6 @@
     "5": "Queque casero"
   },
   "kids": [
-    "Luciano",
-    "Sofía",
     "Clemente A",
     "Sebastián",
     "Clemente S",
@@ -22,30 +20,94 @@
     "Cosmo",
     "Trinidad",
     "Olivia",
-    "Juana"
+    "Juana",
+    "Luciano",
+    "Sofía"
   ],
   "closures": [
+    { "date": "2026-07-06", "reason": "No hay clase" },
+    { "from": "2026-07-16", "to": "2026-07-17", "reason": "Feriado" },
     { "from": "2026-09-14", "to": "2026-09-18", "reason": "Vacaciones" },
-    { "date": "2026-09-21", "reason": "Feriado" }
+    { "date": "2026-09-21", "reason": "Feriado" },
+    { "date": "2026-10-12", "reason": "Encuentro de Dos Mundos" },
+    { "date": "2026-12-08", "reason": "Inmaculada Concepción" },
+    { "date": "2026-12-25", "reason": "Navidad" }
   ],
-  "overrides": [
-    {
-      "date": "2026-09-29",
-      "kid": "Sofía",
-      "note": "cambio con Luciano"
-    },
-    {
-      "date": "2026-09-30",
-      "kid": "Luciano",
-      "note": "cambio con Sofía"
-    }
+  "history": [
+    { "date": "2026-07-07", "kid": "Noelle" },
+    { "date": "2026-07-08", "kid": "Ben" },
+    { "date": "2026-07-09", "kid": "Amelia" },
+    { "date": "2026-07-10", "kid": "Iñigo" },
+    { "date": "2026-07-13", "kid": "Jerónimo" },
+    { "date": "2026-07-14", "kid": "Emma" },
+    { "date": "2026-07-15", "kid": "Olivia" },
+    { "date": "2026-07-20", "kid": "Trinidad" },
+    { "date": "2026-07-21", "kid": "Juana" },
+    { "date": "2026-07-22", "kid": "Luciano" },
+    { "date": "2026-07-23", "kid": "Sofía" },
+    { "date": "2026-07-24", "kid": "Sebastián" },
+    { "date": "2026-07-27", "kid": "Clemente S" },
+    { "date": "2026-07-28", "kid": "Clemente A" },
+    { "date": "2026-07-29", "kid": "Noelle" },
+    { "date": "2026-07-30", "kid": "Ben" },
+    { "date": "2026-07-31", "kid": "Amelia" },
+    { "date": "2026-08-03", "kid": "Iñigo" },
+    { "date": "2026-08-04", "kid": "Jerónimo" },
+    { "date": "2026-08-05", "kid": "Emma" },
+    { "date": "2026-08-06", "kid": "Olivia" },
+    { "date": "2026-08-07", "kid": "Trinidad" },
+    { "date": "2026-08-10", "kid": "Cosmo" },
+    { "date": "2026-08-11", "kid": "Juana" },
+    { "date": "2026-08-12", "kid": "Sofía" },
+    { "date": "2026-08-13", "kid": "Sebastián" },
+    { "date": "2026-08-14", "kid": "Luciano" },
+    { "date": "2026-08-17", "kid": "Clemente A" },
+    { "date": "2026-08-18", "kid": "Clemente S" },
+    { "date": "2026-08-19", "kid": "Ben" },
+    { "date": "2026-08-20", "kid": "Amelia" },
+    { "date": "2026-08-21", "kid": "Noelle" },
+    { "date": "2026-08-24", "kid": "Jerónimo" },
+    { "date": "2026-08-25", "kid": "Iñigo" },
+    { "date": "2026-08-26", "kid": "Olivia" },
+    { "date": "2026-08-27", "kid": "Trinidad" },
+    { "date": "2026-08-28", "kid": "Cosmo" },
+    { "date": "2026-08-31", "kid": "Emma" },
+    { "date": "2026-09-01", "kid": "Luciano" },
+    { "date": "2026-09-02", "kid": "Sofía" },
+    { "date": "2026-09-03", "kid": "Clemente A" },
+    { "date": "2026-09-04", "kid": "Sebastián" },
+    { "date": "2026-09-07", "kid": "Clemente S" },
+    { "date": "2026-09-08", "kid": "Noelle" },
+    { "date": "2026-09-09", "kid": "Ben" },
+    { "date": "2026-09-10", "kid": "Amelia" },
+    { "date": "2026-09-11", "kid": "Iñigo" },
+    { "date": "2026-09-22", "kid": "Jerónimo" },
+    { "date": "2026-09-23", "kid": "Cosmo" },
+    { "date": "2026-09-24", "kid": "Trinidad" },
+    { "date": "2026-09-25", "kid": "Olivia" },
+    { "date": "2026-09-28", "kid": "Juana" },
+    { "date": "2026-09-29", "kid": "Sofía" },
+    { "date": "2026-09-30", "kid": "Luciano" }
   ],
   "events": [
     {
-      "date": "2026-09-18",
-      "title": "Fiestas Patrias",
+      "date": "2026-09-01",
+      "title": "Vacunación escolar",
       "audience": "todos",
-      "note": "Último día de clases antes de vacaciones. Se reintegra el 21 no hay clases, volvemos el 22."
+      "note": "Puesta al día de vacuna SRP para Preescolar a 3° básico, según Programa Nacional de Inmunizaciones."
+    },
+    {
+      "date": "2026-09-11",
+      "title": "Acto de Fiestas Patrias",
+      "audience": "todos",
+      "note": "Asistir con la vestimenta típica enviada por el colegio para el curso."
+    }
+  ],
+  "attachments": [
+    {
+      "date": "2026-09-11",
+      "file": "attachments/Casa de Niños.docx",
+      "label": "Vestimenta Acto de Fiestas Patrias"
     }
   ]
 }
