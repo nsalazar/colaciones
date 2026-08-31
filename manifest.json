@@ -1,0 +1,9 @@
+{
+  "name": "Colación compartida",
+  "short_name": "Colación",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F1F4EC",
+  "theme_color": "#F1F4EC",
+  "icons": []
+}

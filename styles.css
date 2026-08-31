@@ -1,0 +1,356 @@
+:root {
+  --paper: #F1F4EC;
+  --card: #FFFFFF;
+  --ink: #17271C;
+  --ink-soft: #566356;
+  --leaf: #2F7D4F;
+  --leaf-deep: #1E5738;
+  --mandarin: #E8730C;
+  --line: #DCE3D5;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.wrap {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 2rem 1.15rem 4rem;
+}
+
+/* ---------- head ---------- */
+
+.head { margin-bottom: 1.6rem; }
+
+h1 {
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 2.1rem;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.sub {
+  margin: .35rem 0 0;
+  color: var(--ink-soft);
+  font-size: .95rem;
+}
+
+/* ---------- personal strip ---------- */
+
+.mine {
+  background: var(--leaf-deep);
+  color: #EFF6EE;
+  border-radius: 14px;
+  padding: 1rem 1.15rem;
+  margin-bottom: 1.6rem;
+}
+
+.mine-lead {
+  margin: 0;
+  font-size: .9rem;
+  color: #A9CDB4;
+}
+
+.mine-meal {
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.45rem;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  margin: .15rem 0 0;
+}
+
+/* ---------- week nav ---------- */
+
+.weeknav {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: .5rem;
+  margin-bottom: .25rem;
+}
+
+.weeklabel {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+  font-weight: 600;
+  font-size: .95rem;
+}
+
+.stepper {
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  font-size: 1.5rem;
+  line-height: 1;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.stepper:hover { background: #E3E9DC; }
+
+/* ---------- day rows ---------- */
+
+.days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.day {
+  display: grid;
+  grid-template-columns: 3.4rem 1fr;
+  gap: 1rem;
+  align-items: baseline;
+  padding: .95rem .9rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.day-when { line-height: 1.2; }
+
+.day-dow {
+  display: block;
+  font-weight: 600;
+  font-size: .95rem;
+}
+
+.day-num {
+  display: block;
+  color: var(--ink-soft);
+  font-size: .8rem;
+}
+
+.day-meal {
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.2rem;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.day-kid {
+  margin: .1rem 0 0;
+  color: var(--ink-soft);
+  font-size: .95rem;
+}
+
+.day.today {
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 12px;
+  border-bottom-color: transparent;
+}
+
+.day.today .day-num,
+.day.today .day-kid { color: #B6C6B8; }
+
+.day.today .day-meal { color: #FFFFFF; }
+
+.day.off .day-meal {
+  font-family: "Inter", sans-serif;
+  font-weight: 500;
+  font-size: 1rem;
+  color: var(--ink-soft);
+}
+
+.day.nofood {
+  background: #FBE9DA;
+  border-radius: 12px;
+  border-bottom-color: transparent;
+}
+
+.day.off.nofood .day-meal {
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: #8A3E06;
+}
+
+.day.nofood .day-kid,
+.day.nofood .day-num { color: #A75C1F; }
+
+.day.today.nofood { background: var(--mandarin); }
+
+.day.today.nofood .day-meal,
+.day.today.nofood .day-kid,
+.day.today.nofood .day-num { color: #FFFFFF; }
+
+.tag {
+  display: inline-block;
+  margin-left: .45rem;
+  padding: .1rem .45rem;
+  border: 1px solid var(--mandarin);
+  border-radius: 999px;
+  color: var(--mandarin);
+  font-size: .72rem;
+  font-weight: 600;
+  vertical-align: .12em;
+}
+
+.day.today .tag { border-color: #F2A45C; color: #F2A45C; }
+
+.day.mine-day .day-kid {
+  color: var(--leaf);
+  font-weight: 600;
+}
+
+/* ---------- buttons ---------- */
+
+.rowbtns {
+  display: flex;
+  gap: .5rem;
+  margin-top: 1.1rem;
+}
+
+.ghost {
+  flex: 1;
+  padding: .7rem .5rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: .9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.ghost:hover { border-color: var(--ink-soft); }
+
+/* ---------- avisos ---------- */
+
+.avisos { margin-top: 2.6rem; }
+
+.avisos h2 {
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.3rem;
+  margin: 0 0 .7rem;
+}
+
+.avisos ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.aviso {
+  background: var(--card);
+  border-radius: 12px;
+  padding: .9rem 1rem;
+  margin-bottom: .6rem;
+}
+
+.aviso h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.aviso p {
+  margin: .25rem 0 0;
+  color: var(--ink-soft);
+  font-size: .93rem;
+}
+
+.aviso time {
+  display: block;
+  margin-top: .5rem;
+  color: var(--ink-soft);
+  font-size: .78rem;
+}
+
+/* ---------- picker ---------- */
+
+.picker {
+  margin-top: 2.6rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--line);
+}
+
+.picker label {
+  display: block;
+  font-weight: 600;
+  font-size: .95rem;
+}
+
+.hint {
+  margin: .2rem 0 .6rem;
+  color: var(--ink-soft);
+  font-size: .85rem;
+}
+
+select {
+  width: 100%;
+  padding: .7rem .6rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+.err {
+  margin-top: 2rem;
+  padding: .9rem 1rem;
+  border-radius: 12px;
+  background: #FBE9DA;
+  color: #8A3E06;
+  font-size: .9rem;
+}
+
+:focus-visible {
+  outline: 2px solid var(--mandarin);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+.event {
+  margin: .5rem 0 0;
+  padding: .45rem .6rem;
+  border-left: 3px solid var(--leaf);
+  background: #E8EFE4;
+  border-radius: 0 8px 8px 0;
+  font-size: .87rem;
+  color: var(--leaf-deep);
+}
+
+.event-mine {
+  border-left-color: var(--mandarin);
+  background: #FBE9DA;
+  color: #8A3E06;
+  font-weight: 500;
+}
+
+.event-note {
+  color: inherit;
+  opacity: .8;
+  font-size: .82rem;
+}
+
+.day.today .event {
+  background: #2C4033;
+  color: #CFE0D2;
+  border-left-color: #7FB48F;
+}

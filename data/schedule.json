@@ -1,0 +1,66 @@
+{
+  "curso": "Kínder B",
+  "rotationStart": "2026-08-03",
+  "weekdays": {
+    "1": "Fruta",
+    "2": "Lácteo",
+    "3": "Verdura",
+    "4": "Cereal o galletas",
+    "5": "Libre"
+  },
+  "kids": [
+    "Agustina Rojas",
+    "Benjamín Soto",
+    "Catalina Muñoz",
+    "Diego Fuentes",
+    "Emilia Cortés",
+    "Facundo Reyes",
+    "Gaspar Vidal",
+    "Isidora Lagos",
+    "Joaquín Bravo",
+    "Laura Pizarro",
+    "Martín Espinoza",
+    "Renata Cáceres"
+  ],
+  "closures": [
+    { "from": "2026-07-13", "to": "2026-07-24", "reason": "Vacaciones de invierno" },
+    { "date": "2026-09-17", "reason": "Interferiado" },
+    { "date": "2026-09-18", "reason": "Fiestas Patrias" },
+    { "date": "2026-10-12", "reason": "Encuentro de Dos Mundos" },
+    { "date": "2026-09-30", "type": "sinColacion", "reason": "Aniversario del colegio, hay catering" },
+    { "from": "2026-12-14", "to": "2027-03-01", "reason": "Vacaciones de verano" }
+  ],
+  "overrides": [
+    {
+      "date": "2026-09-02",
+      "kid": "Joaquín Bravo",
+      "note": "cambio con Catalina"
+    },
+    {
+      "date": "2026-09-10",
+      "kid": "Catalina Muñoz",
+      "note": "cambio con Joaquín"
+    }
+  ],
+  "events": [
+    {
+      "date": "2026-10-08",
+      "time": "19:00",
+      "title": "Reunión de apoderados",
+      "audience": "todos",
+      "place": "Sala Kínder B"
+    },
+    {
+      "from": "2026-11-05",
+      "to": "2026-11-06",
+      "title": "Paseo a Farellones",
+      "audience": "todos",
+      "note": "Llevar parka, guantes y almuerzo. Salida 8:00 desde el colegio."
+    },
+    {
+      "date": "2026-10-20",
+      "title": "Turno de decoración de sala",
+      "audience": ["Diego Fuentes", "Emilia Cortés", "Renata Cáceres"]
+    }
+  ]
+}
