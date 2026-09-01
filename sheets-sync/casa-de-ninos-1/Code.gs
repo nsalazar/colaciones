@@ -243,11 +243,58 @@ function setupContactsAndNotificationsTabs() {
     configSheet.getRange(configSheet.getLastRow() + 1, 1, 1, 2).setValues([["ID de Grupo WhatsApp", ""]]);
   }
 
+  styleWhatsappTabs();
+  reorderTabs();
+
   SpreadsheetApp.getUi().alert(
     "Listo. Revisa las pestañas Contactos y Notificaciones, completa tus datos, y en Config " +
     "agrega el \"ID de Grupo WhatsApp\" si quieres que el resumen semanal se envíe al grupo del curso " +
     "(vacío = no se envía)."
   );
+}
+
+/** Aplica el mismo estilo (encabezado teal, leyenda en cursiva, fuente) que ya tienen las demás pestañas. */
+function styleWhatsappTabs() {
+  styleTable(SpreadsheetApp.getActive().getSheetByName("Contactos"), 5);
+  styleTable(SpreadsheetApp.getActive().getSheetByName("Notificaciones"), 6);
+}
+
+function styleTable(sh, numCols) {
+  if (!sh) return;
+
+  sh.getRange(1, 1)
+    .setFontFamily("Arial").setFontStyle("italic").setFontSize(9).setFontColor("#5C6860");
+  sh.setRowHeight(1, 28);
+
+  sh.getRange(3, 1, 1, numCols)
+    .setBackground("#1C8E79").setFontColor("#FFFFFF")
+    .setFontWeight("bold").setFontFamily("Arial").setFontSize(10);
+
+  const lastRow = sh.getLastRow();
+  if (lastRow >= 4) {
+    sh.getRange(4, 1, lastRow - 3, numCols)
+      .setFontFamily("Arial").setFontSize(10).setFontWeight("normal").setFontStyle("normal").setFontColor("#000000");
+  }
+
+  sh.setFrozenRows(3);
+}
+
+/** Deja las pestañas de ambos Sheets en el mismo orden: setup -> calendario -> extras -> notificaciones. */
+function reorderTabs() {
+  const ss = SpreadsheetApp.getActive();
+  const order = [
+    "Config", "Rotacion", "Colaciones", "Contactos",
+    "Cierres", "Historial", "Eventos",
+    "Adjuntos", "Restricciones", "Avisos",
+    "Notificaciones"
+  ];
+  order.forEach(function (name, i) {
+    const sh = ss.getSheetByName(name);
+    if (sh) {
+      ss.setActiveSheet(sh);
+      ss.moveActiveSheet(i + 1);
+    }
+  });
 }
 
 /* ---------- fechas (mismo enfoque que el sitio, sin drift de UTC) ---------- */
@@ -270,6 +317,15 @@ function addDays(d, n) {
 
 function longDateEs(d) {
   return d.getDate() + " de " + MESES_ES[d.getMonth()];
+}
+
+/** "Martes 01-Septiembre" — usado en el bloque de novedades del resumen semanal. */
+function novedadFechaEs(d) {
+  const dow = DOW_ES[d.getDay()];
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mes = MESES_ES[d.getMonth()];
+  const mesCap = mes.charAt(0).toUpperCase() + mes.slice(1);
+  return dow + " " + dd + "-" + mesCap;
 }
 
 /* ---------- rotación (portado de app.js — misma lógica que usa el sitio) ---------- */
@@ -476,11 +532,14 @@ function buildWeeklyMessageAndSend(conf, monday) {
       const end = parseDateLocal(e.to);
       while (d <= end) { dates.push(toISO(d)); d = addDays(d, 1); }
     }
-    const inWeek = dates.some(function (iso) {
+    const inWeekDates = dates.filter(function (iso) {
       const d = parseDateLocal(iso);
       return d >= monday && d < sunday;
     });
-    if (inWeek) eventLines.push("- " + e.title + (e.time ? " (" + e.time + ")" : ""));
+    if (inWeekDates.length) {
+      const first = parseDateLocal(inWeekDates[0]);
+      eventLines.push("- [" + novedadFechaEs(first) + "] " + e.title + (e.time ? " (" + e.time + ")" : ""));
+    }
   });
 
   const novedades = eventLines.length
