@@ -174,9 +174,8 @@ function shortMeal(text) {
   return text.split(" (")[0].trim();
 }
 
-function renderLegend() {
-  const row = document.getElementById("legend");
-  row.innerHTML = "";
+function buildLegendRow() {
+  const row = document.createElement("tr");
   for (let i = 1; i <= 7; i++) {
     const th = document.createElement("th");
     const isWeekend = i >= 6;
@@ -215,6 +214,13 @@ function renderLegend() {
 
     row.append(th);
   }
+  return row;
+}
+
+function renderLegend() {
+  const row = document.getElementById("legend");
+  row.innerHTML = "";
+  row.append(...buildLegendRow().children);
 }
 
 function svgIcon(innerPaths) {
@@ -231,7 +237,7 @@ function svgIcon(innerPaths) {
   return icon;
 }
 
-function dayCellContent(d, inMonth) {
+function dayCellContent(d, inMonth, opts = {}) {
   const td = document.createElement("td");
   if (!inMonth) {
     td.className = "empty";
@@ -249,12 +255,12 @@ function dayCellContent(d, inMonth) {
 
   td.className = "cell";
   if (isWeekend) td.classList.add("weekend");
-  if (iso === todayISO) td.classList.add("today");
+  if (!opts.hideToday && iso === todayISO) td.classList.add("today");
   else if (iso < todayISO) td.classList.add("past");
   if (!entry) td.classList.add("off");
   if (closure && closure.type === "sinColacion") td.classList.add("nofood");
   if (closure && closure.type === "sinClases") td.classList.add("closed");
-  if (entry && state.myKid && entry.kid === state.myKid) td.classList.add("mine-day");
+  if (!opts.hideMine && entry && state.myKid && entry.kid === state.myKid) td.classList.add("mine-day");
   if (dayEvents.length) td.classList.add("has-event");
 
   const num = document.createElement("span");
@@ -342,26 +348,30 @@ function dayCellContent(d, inMonth) {
   return td;
 }
 
-function renderMonth() {
-  const body = document.getElementById("calBody");
-  body.innerHTML = "";
-
-  const start = firstOfMonth(state.anchor);
-  const end = lastOfMonth(state.anchor);
-  document.getElementById("monthlabel").textContent =
-    capitalize(`${MONTHS[start.getMonth()]} ${start.getFullYear()}`);
-
+function fillMonthRows(container, anchor, opts = {}) {
+  container.innerHTML = "";
+  const start = firstOfMonth(anchor);
+  const end = lastOfMonth(anchor);
   let cursor = mondayOf(start);
   while (cursor <= end) {
     const tr = document.createElement("tr");
     for (let i = 0; i < 7; i++) {
       const d = addDays(cursor, i);
       const inMonth = d.getMonth() === start.getMonth();
-      tr.append(dayCellContent(d, inMonth));
+      tr.append(dayCellContent(d, inMonth, opts));
     }
-    body.append(tr);
+    container.append(tr);
     cursor = addDays(cursor, 7);
   }
+}
+
+function renderMonth() {
+  const body = document.getElementById("calBody");
+  const start = firstOfMonth(state.anchor);
+  document.getElementById("monthlabel").textContent =
+    capitalize(`${MONTHS[start.getMonth()]} ${start.getFullYear()}`);
+
+  fillMonthRows(body, state.anchor);
 
   const now = firstOfMonth(new Date());
   document.getElementById("today").disabled =
@@ -508,6 +518,112 @@ function monthText() {
   return lines.join("\n");
 }
 
+/* ---------- compartir como imagen ---------- */
+
+const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+let html2canvasPromise = null;
+
+function loadHtml2Canvas() {
+  if (window.html2canvas) return Promise.resolve();
+  if (!html2canvasPromise) {
+    html2canvasPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = HTML2CANVAS_URL;
+      script.onload = () => resolve();
+      script.onerror = () => { html2canvasPromise = null; reject(new Error("No se pudo cargar html2canvas")); };
+      document.head.append(script);
+    });
+  }
+  return html2canvasPromise;
+}
+
+function buildShareSnapshot(anchor) {
+  const start = firstOfMonth(anchor);
+  const wrap = document.createElement("div");
+  wrap.style.cssText =
+    `position:fixed; top:0; left:-10000px; background:var(--paper); ` +
+    `padding:1.25rem; width:${document.querySelector(".wrap").clientWidth}px;`;
+
+  const nav = document.createElement("nav");
+  nav.className = "monthnav";
+  const prevBtn = document.createElement("button");
+  prevBtn.type = "button";
+  prevBtn.className = "stepper";
+  prevBtn.textContent = "‹";
+  const label = document.createElement("p");
+  label.className = "monthlabel";
+  label.textContent = capitalize(`${MONTHS[start.getMonth()]} ${start.getFullYear()}`);
+  const nextBtn = document.createElement("button");
+  nextBtn.type = "button";
+  nextBtn.className = "stepper";
+  nextBtn.textContent = "›";
+  nav.append(prevBtn, label, nextBtn);
+
+  const table = document.createElement("table");
+  table.className = "cal";
+  const thead = document.createElement("thead");
+  thead.append(buildLegendRow());
+  const tbody = document.createElement("tbody");
+  fillMonthRows(tbody, anchor, { hideToday: true, hideMine: true });
+  table.append(thead, tbody);
+
+  wrap.append(nav, table);
+  document.body.append(wrap);
+  return wrap;
+}
+
+function shareFileName(anchor) {
+  const start = firstOfMonth(anchor);
+  return `colacion-${state.cfg.curso}-${MONTHS[start.getMonth()]}-${start.getFullYear()}`
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") + ".png";
+}
+
+async function shareMonthImage() {
+  const btn = document.getElementById("shareImage");
+  const label = btn.querySelector(".btn-label");
+  const originalLabel = label.textContent;
+  btn.disabled = true;
+  label.textContent = "Generando…";
+
+  let snapshot;
+  try {
+    await loadHtml2Canvas();
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+
+    snapshot = buildShareSnapshot(state.anchor);
+    const canvas = await window.html2canvas(snapshot, { backgroundColor: "#F3F6F1", scale: 2 });
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    const filename = shareFileName(state.anchor);
+    const file = new File([blob], filename, { type: "image/png" });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      alert("Imagen descargada. Compártela desde tus archivos o galería.");
+    }
+  } catch (e) {
+    if (e && e.name !== "AbortError") {
+      console.error(e);
+      alert("No se pudo generar la imagen. Intenta de nuevo.");
+    }
+  } finally {
+    if (snapshot) snapshot.remove();
+    label.textContent = originalLabel;
+    btn.disabled = false;
+  }
+}
+
 /* ---------- boot ---------- */
 
 async function switchCourse(id) {
@@ -595,6 +711,7 @@ async function boot() {
       state.anchor = firstOfMonth(new Date());
       renderMonth();
     });
+    document.getElementById("shareImage").addEventListener("click", shareMonthImage);
     document.getElementById("share").addEventListener("click", async () => {
       const text = monthText();
       if (navigator.share) {

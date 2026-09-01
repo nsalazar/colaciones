@@ -374,12 +374,13 @@ h1 {
 
 .rowbtns {
   display: flex;
+  flex-wrap: wrap;
   gap: .5rem;
   margin-top: 1.1rem;
 }
 
 .ghost {
-  flex: 1;
+  flex: 1 1 9rem;
   display: flex;
   align-items: center;
   justify-content: center;
