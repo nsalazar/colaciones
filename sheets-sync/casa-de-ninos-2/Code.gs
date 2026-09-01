@@ -432,7 +432,6 @@ function runWeeklyReminder(conf) {
   const cfg = buildSchedule();
   const closures = expandClosuresMap(cfg.closures);
   const index = buildIndexMap(cfg, closures);
-  const contacts = readContacts();
 
   const monday = nextMonday(new Date());
   const sunday = addDays(monday, 7);
@@ -445,13 +444,11 @@ function runWeeklyReminder(conf) {
     const entry = index[iso];
     const closure = closures[iso];
     if (entry) {
-      const kidContacts = contacts[entry.kid] || [];
-      const tags = tagsFor(kidContacts);
-      lines.push("- " + dowName + ": " + entry.meal + " (" + entry.kid + (tags ? " " + tags : "") + ")");
+      lines.push("- *" + dowName + " (" + entry.kid + ")*: " + entry.meal);
     } else if (closure) {
-      lines.push("- " + dowName + ": " + closure.reason);
+      lines.push("- *" + dowName + "*: " + closure.reason);
     } else {
-      lines.push("- " + dowName + ": (sin información)");
+      lines.push("- *" + dowName + "*: (sin información)");
     }
   }
 
