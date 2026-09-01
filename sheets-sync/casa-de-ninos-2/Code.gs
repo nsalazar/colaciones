@@ -17,6 +17,12 @@ const ANNOUNCEMENTS_PATH = "data/casa-de-ninos-2/announcements.json";
 
 const DIRTY_KEY = "colacion_dirty";
 
+/** Pestañas que sí viajan a GitHub vía publish()/buildSchedule()/buildAnnouncements(). */
+const PUBLISHED_SHEETS = [
+  "Config", "Rotacion", "Colaciones", "Cierres",
+  "Historial", "Eventos", "Adjuntos", "Restricciones", "Avisos"
+];
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("Colación")
@@ -24,7 +30,31 @@ function onOpen() {
     .addToUi();
 }
 
+/**
+ * Marca "cambios sin publicar" solo si la edición puede afectar lo que sale
+ * a GitHub. Contactos y Notificaciones nunca se publican, así que editarlas
+ * no debe encender el aviso. En Config, solo "Curso" e "Inicio de rotación"
+ * se publican — Alias e "ID de Grupo WhatsApp" son de uso interno del Sheet.
+ */
 function onEdit(e) {
+  const sheet = e.range.getSheet();
+  const sheetName = sheet.getName();
+  if (PUBLISHED_SHEETS.indexOf(sheetName) === -1) return;
+
+  if (sheetName === "Config") {
+    const headers = sheet.getRange(3, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const campoCol = headers.indexOf("Campo") + 1;
+    if (campoCol < 1) return;
+    const startRow = Math.max(e.range.getRow(), 4);
+    const endRow = e.range.getLastRow();
+    if (startRow > endRow) return;
+    const campos = sheet.getRange(startRow, campoCol, endRow - startRow + 1, 1).getValues();
+    const touchesPublished = campos.some(function (row) {
+      return row[0] === "Curso" || row[0] === "Inicio de rotación (rotationStart)";
+    });
+    if (!touchesPublished) return;
+  }
+
   PropertiesService.getDocumentProperties().setProperty(DIRTY_KEY, "true");
 }
 
