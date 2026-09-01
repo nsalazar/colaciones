@@ -184,3 +184,312 @@ function publish() {
   PropertiesService.getDocumentProperties().deleteProperty(DIRTY_KEY);
   return { ok: true, curso: schedule.curso };
 }
+
+/* ============================================================
+ * WHATSAPP — recordatorios por Home Assistant
+ *
+ * IMPORTANTE: las pestañas "Contactos" y "Notificaciones" NUNCA se leen
+ * desde publish()/buildSchedule(), así que los teléfonos jamás salen hacia
+ * el repo público de GitHub. Solo viajan de aquí directo al webhook de
+ * Home Assistant.
+ * ============================================================ */
+
+const TZ = "America/Santiago";
+const DOW_ES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+const MESES_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+/** Crea las pestañas Contactos y Notificaciones si no existen. Ejecutar UNA VEZ. */
+function setupContactsAndNotificationsTabs() {
+  const ss = SpreadsheetApp.getActive();
+
+  if (!ss.getSheetByName("Contactos")) {
+    const sh = ss.insertSheet("Contactos");
+    sh.getRange(1, 1).setValue(
+      "Teléfono en formato internacional, solo dígitos (ej. 56912345678, sin +, sin espacios ni guiones)."
+    );
+    sh.getRange(3, 1, 1, 5).setValues([["Niño/a", "Apoderado 1", "Teléfono 1", "Apoderado 2", "Teléfono 2"]]);
+    sh.getRange(4, 1, 1, 5).setValues([["Ej: Iñigo", "María Pérez", "56912345678", "Juan Soto", "56987654321"]]);
+  }
+
+  if (!ss.getSheetByName("Notificaciones")) {
+    const sh = ss.insertSheet("Notificaciones");
+    sh.getRange(1, 1).setValue(
+      "Placeholders Diario: {nino} {fecha} {dia_semana} {colacion} {tags}. " +
+      "Placeholders Semanal: {semana} {novedades} (novedades ya trae su propio salto de línea, solo úsalo pegado a {semana}). " +
+      "Hora en formato HH:mm, en punto o :15/:30/:45 (el chequeo corre cada 15 min). " +
+      "Activo=FALSE desactiva ese recordatorio sin borrar la fila."
+    );
+    sh.getRange(3, 1, 1, 6).setValues([["Recordatorio", "Activo", "DíaSemana", "DíasAntes", "Hora", "Mensaje"]]);
+    sh.getRange(4, 1, 1, 6).setValues([[
+      "Diario", "TRUE", "", 1, "09:00",
+      "Hola! Mañana {dia_semana} {fecha} le toca a {nino} llevar la colación 🍽️ {colacion} {tags}"
+    ]]);
+    sh.getRange(5, 1, 1, 6).setValues([[
+      "Semanal", "TRUE", "Viernes", "", "09:00",
+      "Hola! La colación compartida para la próxima semana queda así:\n{semana}{novedades}"
+    ]]);
+    sh.setColumnWidth(6, 420);
+  }
+
+  SpreadsheetApp.getUi().alert("Listo. Revisa las pestañas Contactos y Notificaciones y completa tus datos.");
+}
+
+/* ---------- fechas (mismo enfoque que el sitio, sin drift de UTC) ---------- */
+
+function parseDateLocal(iso) {
+  const p = String(iso).split("-").map(Number);
+  return new Date(p[0], p[1] - 1, p[2]);
+}
+
+function toISO(d) {
+  const p = function (n) { return String(n).padStart(2, "0"); };
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+}
+
+function addDays(d, n) {
+  const c = new Date(d);
+  c.setDate(c.getDate() + n);
+  return c;
+}
+
+function longDateEs(d) {
+  return d.getDate() + " de " + MESES_ES[d.getMonth()];
+}
+
+/* ---------- rotación (portado de app.js — misma lógica que usa el sitio) ---------- */
+
+function expandClosuresMap(list) {
+  const map = {};
+  (list || []).forEach(function (c) {
+    const entry = { type: c.type === "sinColacion" ? "sinColacion" : "sinClases", reason: c.reason || "" };
+    if (c.date) {
+      map[c.date] = entry;
+    } else if (c.from && c.to) {
+      let d = parseDateLocal(c.from);
+      const end = parseDateLocal(c.to);
+      while (d <= end) { map[toISO(d)] = entry; d = addDays(d, 1); }
+    }
+  });
+  return map;
+}
+
+function buildIndexMap(cfg, closures) {
+  const map = {};
+  if (cfg.kids && cfg.kids.length) {
+    let cursor = parseDateLocal(cfg.rotationStart);
+    const last = addDays(cursor, 420);
+    let turn = 0;
+    while (cursor <= last) {
+      const dow = cursor.getDay();
+      const iso = toISO(cursor);
+      const meal = cfg.weekdays[String(dow)];
+      if (meal && !closures[iso]) {
+        map[iso] = { meal: meal, kid: cfg.kids[turn % cfg.kids.length] };
+        turn++;
+      }
+      cursor = addDays(cursor, 1);
+    }
+  }
+  (cfg.history || []).forEach(function (h) {
+    const meal = cfg.weekdays[String(parseDateLocal(h.date).getDay())];
+    if (meal) map[h.date] = { meal: meal, kid: h.kid };
+  });
+  (cfg.overrides || []).forEach(function (o) {
+    const entry = map[o.date];
+    if (entry) {
+      entry.kid = o.kid;
+      if (o.note) { entry.note = o.note; entry.swapped = true; }
+    }
+  });
+  return map;
+}
+
+/* ---------- contactos ---------- */
+
+function normalizePhone(v) {
+  return String(v).replace(/[^0-9]/g, "");
+}
+
+function readContacts() {
+  const map = {};
+  readTable("Contactos").forEach(function (r) {
+    const kid = r["Niño/a"];
+    if (!kid) return;
+    const contacts = [];
+    if (r["Teléfono 1"]) contacts.push({ name: r["Apoderado 1"] || "", phone: normalizePhone(r["Teléfono 1"]) });
+    if (r["Teléfono 2"]) contacts.push({ name: r["Apoderado 2"] || "", phone: normalizePhone(r["Teléfono 2"]) });
+    map[kid] = contacts;
+  });
+  return map;
+}
+
+function tagsFor(contacts) {
+  return contacts
+    .filter(function (c) { return c.name; })
+    .map(function (c) { return "@" + c.name; })
+    .join(" ");
+}
+
+/* ---------- configuración de notificaciones ---------- */
+
+function fmtTime(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, TZ, "HH:mm");
+  return String(v || "").trim();
+}
+
+function readNotifConfig() {
+  const byType = {};
+  readTable("Notificaciones").forEach(function (r) {
+    byType[r["Recordatorio"]] = {
+      activo: String(r["Activo"]).trim().toUpperCase() !== "FALSE",
+      diaSemana: r["DíaSemana"] ? String(r["DíaSemana"]).trim() : "",
+      diasAntes: r["DíasAntes"] ? Number(r["DíasAntes"]) : 1,
+      hora: fmtTime(r["Hora"]),
+      mensaje: r["Mensaje"] || ""
+    };
+  });
+  return byType;
+}
+
+function fillTemplate(tpl, data) {
+  return tpl.replace(/\{(\w+)\}/g, function (_, key) {
+    return Object.prototype.hasOwnProperty.call(data, key) ? data[key] : "";
+  });
+}
+
+/* ---------- envío ---------- */
+
+function sendWhatsapp(phone, message) {
+  const url = PropertiesService.getScriptProperties().getProperty("HA_WEBHOOK_URL");
+  if (!url) throw new Error("Falta configurar HA_WEBHOOK_URL en Script Properties.");
+  UrlFetchApp.fetch(url, {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify({ phone: phone, message: message }),
+    muteHttpExceptions: true
+  });
+}
+
+/* ---------- recordatorio diario ---------- */
+
+function runDailyReminder(conf) {
+  const cfg = buildSchedule();
+  const closures = expandClosuresMap(cfg.closures);
+  const index = buildIndexMap(cfg, closures);
+  const contacts = readContacts();
+
+  const target = addDays(new Date(), conf.diasAntes);
+  const iso = toISO(target);
+  const entry = index[iso];
+  if (!entry) return; // feriado/vacaciones o sin datos ese día
+
+  const kidContacts = contacts[entry.kid] || [];
+  if (!kidContacts.length) return;
+
+  const message = fillTemplate(conf.mensaje, {
+    nino: entry.kid,
+    fecha: longDateEs(target),
+    dia_semana: DOW_ES[target.getDay()],
+    colacion: entry.meal,
+    tags: tagsFor(kidContacts)
+  });
+
+  kidContacts.forEach(function (c) { sendWhatsapp(c.phone, message); });
+}
+
+/* ---------- recordatorio semanal ---------- */
+
+function nextMonday(from) {
+  const shift = (from.getDay() + 6) % 7; // días desde el lunes de ESTA semana
+  const thisMonday = addDays(from, -shift);
+  return addDays(thisMonday, 7);
+}
+
+function runWeeklyReminder(conf) {
+  const cfg = buildSchedule();
+  const closures = expandClosuresMap(cfg.closures);
+  const index = buildIndexMap(cfg, closures);
+  const contacts = readContacts();
+
+  const monday = nextMonday(new Date());
+  const sunday = addDays(monday, 7);
+  const lines = [];
+  const recipientPhones = {};
+
+  for (let i = 0; i < 5; i++) {
+    const d = addDays(monday, i);
+    const iso = toISO(d);
+    const dowName = DOW_ES[d.getDay()];
+    const entry = index[iso];
+    const closure = closures[iso];
+    if (entry) {
+      const kidContacts = contacts[entry.kid] || [];
+      const tags = tagsFor(kidContacts);
+      lines.push("- " + dowName + ": " + entry.meal + " (" + entry.kid + (tags ? " " + tags : "") + ")");
+      kidContacts.forEach(function (c) { recipientPhones[c.phone] = true; });
+    } else if (closure) {
+      lines.push("- " + dowName + ": " + closure.reason);
+    } else {
+      lines.push("- " + dowName + ": (sin información)");
+    }
+  }
+
+  const eventLines = [];
+  (cfg.events || []).forEach(function (e) {
+    const dates = [];
+    if (e.date) {
+      dates.push(e.date);
+    } else if (e.from && e.to) {
+      let d = parseDateLocal(e.from);
+      const end = parseDateLocal(e.to);
+      while (d <= end) { dates.push(toISO(d)); d = addDays(d, 1); }
+    }
+    const inWeek = dates.some(function (iso) {
+      const d = parseDateLocal(iso);
+      return d >= monday && d < sunday;
+    });
+    if (inWeek) eventLines.push("- " + e.title + (e.time ? " (" + e.time + ")" : ""));
+  });
+
+  const novedades = eventLines.length
+    ? "\n\n📌 Novedades de la semana:\n" + eventLines.join("\n")
+    : "";
+
+  const message = fillTemplate(conf.mensaje, {
+    semana: lines.join("\n"),
+    novedades: novedades
+  });
+
+  Object.keys(recipientPhones).forEach(function (phone) { sendWhatsapp(phone, message); });
+}
+
+/**
+ * Trigger instalable (cada 15 min) que revisa si corresponde disparar
+ * alguno de los dos recordatorios, según lo configurado en "Notificaciones".
+ */
+function checkReminders() {
+  const now = new Date();
+  const hhmm = Utilities.formatDate(now, TZ, "HH:mm");
+  const today = Utilities.formatDate(now, TZ, "yyyy-MM-dd");
+  const props = PropertiesService.getScriptProperties();
+  const notif = readNotifConfig();
+
+  const diario = notif["Diario"];
+  if (diario && diario.activo && diario.hora === hhmm) {
+    const key = "sent_diario_" + today;
+    if (!props.getProperty(key)) {
+      runDailyReminder(diario);
+      props.setProperty(key, "1");
+    }
+  }
+
+  const semanal = notif["Semanal"];
+  if (semanal && semanal.activo && semanal.hora === hhmm && DOW_ES[now.getDay()] === semanal.diaSemana) {
+    const key = "sent_semanal_" + today;
+    if (!props.getProperty(key)) {
+      runWeeklyReminder(semanal);
+      props.setProperty(key, "1");
+    }
+  }
+}
