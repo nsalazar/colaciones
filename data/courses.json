@@ -1,0 +1,16 @@
+[
+  {
+    "id": "casa-de-ninos-1",
+    "alias": "CN1",
+    "name": "Casa de Niños 1",
+    "schedule": "data/casa-de-ninos-1/schedule.json",
+    "announcements": "data/casa-de-ninos-1/announcements.json"
+  },
+  {
+    "id": "casa-de-ninos-2",
+    "alias": "CN2",
+    "name": "Casa de Niños 2",
+    "schedule": "data/casa-de-ninos-2/schedule.json",
+    "announcements": "data/casa-de-ninos-2/announcements.json"
+  }
+]

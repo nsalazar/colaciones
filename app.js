@@ -5,10 +5,12 @@ const DOW_SHORT = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
-const STORE_KEY = "colacion:kid";
+const STORE_COURSE_KEY = "colacion:course";
 const HORIZON_DAYS = 420;
 
 const state = {
+  courses: [],
+  courseId: null,
   cfg: null,
   avisos: [],
   index: new Map(),
@@ -18,6 +20,10 @@ const state = {
   anchor: null, // first day of the displayed month
   myKid: null
 };
+
+function kidStoreKey() {
+  return `colacion:kid:${state.courseId}`;
+}
 
 /* ---------- dates (local, no UTC drift) ---------- */
 
@@ -117,19 +123,22 @@ function involves(ev, kid) {
 
 function buildIndex(cfg, closures) {
   const map = new Map();
-  let cursor = parseDate(cfg.rotationStart);
-  const last = addDays(cursor, HORIZON_DAYS);
-  let turn = 0;
 
-  while (cursor <= last) {
-    const dow = cursor.getDay();
-    const iso = toISO(cursor);
-    const meal = cfg.weekdays[String(dow)];
-    if (meal && !closures.has(iso)) {
-      map.set(iso, { meal, kid: cfg.kids[turn % cfg.kids.length] });
-      turn++;
+  if (cfg.kids && cfg.kids.length) {
+    let cursor = parseDate(cfg.rotationStart);
+    const last = addDays(cursor, HORIZON_DAYS);
+    let turn = 0;
+
+    while (cursor <= last) {
+      const dow = cursor.getDay();
+      const iso = toISO(cursor);
+      const meal = cfg.weekdays[String(dow)];
+      if (meal && !closures.has(iso)) {
+        map.set(iso, { meal, kid: cfg.kids[turn % cfg.kids.length] });
+        turn++;
+      }
+      cursor = addDays(cursor, 1);
     }
-    cursor = addDays(cursor, 1);
   }
 
   for (const h of cfg.history || []) {
@@ -299,15 +308,26 @@ function dayCellContent(d, inMonth) {
   for (const att of dayAttachments) {
     const link = document.createElement("a");
     link.className = "attachment-marker";
-    link.href = encodeURI(att.file);
-    link.download = att.file.split("/").pop();
+    let fallbackName;
+    if (att.file) {
+      link.href = encodeURI(att.file);
+      fallbackName = att.file.split("/").pop();
+      link.download = fallbackName;
+    } else if (att.link) {
+      link.href = att.link;
+      link.target = "_blank";
+      link.rel = "noopener";
+      fallbackName = att.link;
+    } else {
+      continue;
+    }
     link.append(svgIcon(
       '<path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>'
     ));
 
     const tooltip = document.createElement("span");
     tooltip.className = "event-tooltip";
-    tooltip.textContent = "Adjunto: " + (att.label || link.download);
+    tooltip.textContent = "Adjunto: " + (att.label || fallbackName);
     link.append(tooltip);
     icons.push(link);
   }
@@ -359,7 +379,9 @@ function renderUpcomingEvents() {
     if (iso < todayISO) continue;
     for (const ev of evs) items.push({ date: parseDate(iso), ev });
   }
-  items.sort((a, b) => toISO(a.date).localeCompare(toISO(b.date)));
+  items.sort((a, b) =>
+    toISO(a.date).localeCompare(toISO(b.date)) ||
+    (a.ev.time || "").localeCompare(b.ev.time || ""));
 
   if (!items.length) { box.hidden = true; return; }
 
@@ -420,25 +442,40 @@ function renderAvisos() {
   }
 }
 
+function renderRestrictions() {
+  const ul = document.getElementById("restrictions");
+  ul.innerHTML = "";
+  const items = state.cfg.restrictions || [];
+  if (!items.length) {
+    ul.innerHTML = `<li class="aviso"><p>No hay restricciones alimenticias registradas.</p></li>`;
+    return;
+  }
+  for (const r of items) {
+    const li = document.createElement("li");
+    li.className = "aviso";
+    const p = document.createElement("p");
+    p.textContent = r.kid ? `${r.restriction} — ${r.kid}` : r.restriction;
+    li.append(p);
+    ul.append(li);
+  }
+}
+
 function renderPicker() {
   const sel = document.getElementById("kidSelect");
-  for (const kid of state.cfg.kids) {
+  sel.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Mi hijo/a…";
+  sel.append(placeholder);
+
+  const sorted = [...state.cfg.kids].sort((a, b) => a.localeCompare(b, "es"));
+  for (const kid of sorted) {
     const opt = document.createElement("option");
     opt.value = kid;
     opt.textContent = kid;
     sel.append(opt);
   }
-  if (state.myKid) sel.value = state.myKid;
-  sel.addEventListener("change", () => {
-    state.myKid = sel.value || null;
-    try {
-      if (state.myKid) localStorage.setItem(STORE_KEY, state.myKid);
-      else localStorage.removeItem(STORE_KEY);
-    } catch (e) { /* modo privado */ }
-    renderMine();
-    renderMonth();
-    renderUpcomingEvents();
-  });
+  sel.value = state.myKid || "";
 }
 
 function monthText() {
@@ -473,33 +510,78 @@ function monthText() {
 
 /* ---------- boot ---------- */
 
+async function switchCourse(id) {
+  const course = state.courses.find((c) => c.id === id);
+  state.courseId = id;
+  try { localStorage.setItem(STORE_COURSE_KEY, id); } catch (e) { /* modo privado */ }
+
+  const [cfg, avisos] = await Promise.all([
+    fetch(course.schedule, { cache: "no-store" }).then((r) => r.json()),
+    fetch(course.announcements, { cache: "no-store" }).then((r) => r.json())
+  ]);
+
+  state.cfg = cfg;
+  state.avisos = avisos;
+  state.closures = expandClosures(cfg.closures);
+  state.events = expandEvents(cfg.events);
+  state.attachments = expandAttachments(cfg.attachments);
+  state.index = buildIndex(cfg, state.closures);
+  try { state.myKid = localStorage.getItem(kidStoreKey()); } catch (e) { state.myKid = null; }
+
+  renderLegend();
+  renderPicker();
+  renderMine();
+  renderAvisos();
+  renderRestrictions();
+  renderMonth();
+  renderUpcomingEvents();
+}
+
 async function boot() {
   try {
-    const [cfg, avisos] = await Promise.all([
-      fetch("data/schedule.json", { cache: "no-store" }).then((r) => r.json()),
-      fetch("data/announcements.json", { cache: "no-store" }).then((r) => r.json())
-    ]);
+    state.courses = await fetch("data/courses.json", { cache: "no-store" }).then((r) => r.json());
 
-    state.cfg = cfg;
-    state.avisos = avisos;
-    state.closures = expandClosures(cfg.closures);
-    state.events = expandEvents(cfg.events);
-    state.attachments = expandAttachments(cfg.attachments);
-    state.index = buildIndex(cfg, state.closures);
+    const courseSelect = document.getElementById("courseSelect");
+    courseSelect.innerHTML = "";
+    for (const c of state.courses) {
+      const opt = document.createElement("option");
+      opt.value = c.id;
+      opt.textContent = c.name;
+      courseSelect.append(opt);
+    }
+
+    const params = new URLSearchParams(location.search);
+    const classParam = params.get("class");
+    const classCourse = classParam
+      ? state.courses.find((c) => (c.alias || "").toLowerCase() === classParam.toLowerCase())
+      : null;
+
+    let initialId = classCourse ? classCourse.id : null;
+    if (!initialId) {
+      try { initialId = localStorage.getItem(STORE_COURSE_KEY); } catch (e) { initialId = null; }
+    }
+    if (!state.courses.some((c) => c.id === initialId)) {
+      initialId = state.courses[0].id;
+    }
+    courseSelect.value = initialId;
+
+    document.getElementById("hoy").textContent = `Hoy es ${longDate(new Date())}`;
     state.anchor = firstOfMonth(new Date());
-    try { state.myKid = localStorage.getItem(STORE_KEY); } catch (e) { state.myKid = null; }
 
-    document.getElementById("curso").textContent = cfg.curso;
-    const now = new Date();
-    document.getElementById("hoy").textContent =
-      `Hoy es ${longDate(now)}`;
+    courseSelect.addEventListener("change", () => {
+      switchCourse(courseSelect.value);
+    });
 
-    renderLegend();
-    renderPicker();
-    renderMine();
-    renderAvisos();
-    renderMonth();
-    renderUpcomingEvents();
+    document.getElementById("kidSelect").addEventListener("change", (e) => {
+      state.myKid = e.target.value || null;
+      try {
+        if (state.myKid) localStorage.setItem(kidStoreKey(), state.myKid);
+        else localStorage.removeItem(kidStoreKey());
+      } catch (err) { /* modo privado */ }
+      renderMine();
+      renderMonth();
+      renderUpcomingEvents();
+    });
 
     document.getElementById("prev").addEventListener("click", () => {
       state.anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth() - 1, 1);
@@ -522,12 +604,27 @@ async function boot() {
         alert("Mes copiado. Pégalo en el grupo.");
       }
     });
+
+    await switchCourse(initialId);
+
+    const kidParam = classCourse ? params.get("kid") : null;
+    if (kidParam) {
+      const foundKid = state.cfg.kids.find((k) => k.toLowerCase() === kidParam.toLowerCase());
+      if (foundKid) {
+        state.myKid = foundKid;
+        try { localStorage.setItem(kidStoreKey(), foundKid); } catch (e) { /* modo privado */ }
+        document.getElementById("kidSelect").value = foundKid;
+        renderMine();
+        renderMonth();
+        renderUpcomingEvents();
+      }
+    }
   } catch (err) {
     const box = document.getElementById("err");
     box.hidden = false;
     box.textContent = location.protocol === "file:"
       ? "Abre el sitio con un servidor local (python3 -m http.server 8000), no con doble clic en el archivo."
-      : "No se pudo leer data/schedule.json. Revisa que el archivo exista y sea JSON válido.";
+      : "No se pudo leer los datos del curso. Revisa que los archivos existan y sean JSON válido.";
     console.error(err);
   }
 }

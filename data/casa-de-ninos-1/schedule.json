@@ -26,7 +26,8 @@
   ],
   "closures": [
     { "date": "2026-07-06", "reason": "No hay clase" },
-    { "from": "2026-07-16", "to": "2026-07-17", "reason": "Feriado" },
+    { "date": "2026-07-16", "reason": "Feriado" },
+    { "date": "2026-07-17", "reason": "Jornada Docente" },
     { "from": "2026-09-14", "to": "2026-09-18", "reason": "Vacaciones" },
     { "date": "2026-09-21", "reason": "Feriado" },
     { "date": "2026-10-12", "reason": "Encuentro de Dos Mundos" },
@@ -101,6 +102,12 @@
       "title": "Acto de Fiestas Patrias",
       "audience": "todos",
       "note": "Asistir con la vestimenta típica enviada por el colegio para el curso."
+    },
+    {
+      "date": "2026-09-05",
+      "title": "Cambio de Hora",
+      "audience": "todos",
+      "note": "A las 23:59 horas del sábado 5 de septiembre, el reloj pasará a ser la 01:00"
     }
   ],
   "attachments": [
@@ -109,5 +116,6 @@
       "file": "attachments/Casa de Niños.docx",
       "label": "Vestimenta Acto de Fiestas Patrias"
     }
-  ]
+  ],
+  "restrictions": []
 }

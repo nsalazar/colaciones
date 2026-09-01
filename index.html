@@ -24,13 +24,15 @@
           <path d="M24 10c-5 5-8 11-8 16 0 5.2 3.6 9 8 9" fill="none" stroke="var(--teal)" stroke-width="2" opacity=".55"/>
           <path d="M24 15v25" stroke="var(--teal)" stroke-width="2" opacity=".55"/>
         </svg>
-        <p class="eyebrow" id="curso">Curso</p>
+        <span class="eyebrow-wrap">
+          <select id="courseSelect" class="mini-select" aria-label="Curso"></select>
+        </span>
       </div>
       <h1>Colación compartida</h1>
       <p class="sub" id="hoy"></p>
     </div>
     <div class="kid-picker-mini">
-      <select id="kidSelect" title="Se guarda solo en este teléfono, para destacar el turno de tu hijo o hija en el calendario.">
+      <select id="kidSelect" class="mini-select" title="Se guarda solo en este teléfono, para destacar el turno de tu hijo o hija en el calendario.">
         <option value="">Mi hijo/a…</option>
       </select>
     </div>
@@ -85,6 +87,11 @@
   <section class="avisos">
     <h2>Avisos</h2>
     <ul id="avisos"></ul>
+  </section>
+
+  <section class="avisos">
+    <h2>Restricciones alimenticias</h2>
+    <ul id="restrictions"></ul>
   </section>
 
   <p class="err" id="err" hidden></p>

@@ -1,0 +1,122 @@
+{
+  "curso": "Casa de Niños 2",
+  "rotationStart": "2026-10-01",
+  "weekdays": {
+    "1": "Pasta de pollo o hummus con bastones de verduras o pan",
+    "2": "Yogurt sin azúcar con cereales y/o fruta",
+    "3": "Pan (ojalá integral) con queso, jamón, palta y/o tomate",
+    "4": "Yogurt sin azúcar con cereales y/o fruta",
+    "5": "Queque o galletas caseras, endulzadas idealmente con plátano o manzana"
+  },
+  "kids": [
+    "Diego",
+    "Eva",
+    "Blue",
+    "Víctor",
+    "Mila",
+    "Sol",
+    "Borja",
+    "Oliver",
+    "Agustín",
+    "Martina",
+    "Liam",
+    "Milo",
+    "Amanda"
+  ],
+  "closures": [
+    { "date": "2026-07-06", "reason": "No hay clase" },
+    { "date": "2026-07-16", "reason": "Feriado" },
+    { "date": "2026-07-17", "reason": "Jornada Docente" },
+    { "from": "2026-09-14", "to": "2026-09-18", "reason": "Vacaciones" },
+    { "date": "2026-09-21", "reason": "Feriado" },
+    { "date": "2026-10-12", "reason": "Encuentro de Dos Mundos" },
+    { "date": "2026-12-08", "reason": "Inmaculada Concepción" },
+    { "date": "2026-12-25", "reason": "Navidad" }
+  ],
+  "history": [
+    { "date": "2026-07-07", "kid": "Mila" },
+    { "date": "2026-07-08", "kid": "Sol" },
+    { "date": "2026-07-09", "kid": "Borja" },
+    { "date": "2026-07-10", "kid": "Oliver" },
+    { "date": "2026-07-13", "kid": "Agustín" },
+    { "date": "2026-07-14", "kid": "Martina" },
+    { "date": "2026-07-15", "kid": "Liam" },
+    { "date": "2026-07-20", "kid": "Milo" },
+    { "date": "2026-07-21", "kid": "Amanda" },
+    { "date": "2026-07-22", "kid": "Víctor" },
+    { "date": "2026-07-23", "kid": "Diego" },
+    { "date": "2026-07-24", "kid": "Eva" },
+    { "date": "2026-07-27", "kid": "Blue" },
+    { "date": "2026-07-28", "kid": "Aurora" },
+    { "date": "2026-07-29", "kid": "Mila" },
+    { "date": "2026-07-30", "kid": "Sol" },
+    { "date": "2026-07-31", "kid": "Borja" },
+    { "date": "2026-08-03", "kid": "Aurora" },
+    { "date": "2026-08-04", "kid": "Liam" },
+    { "date": "2026-08-05", "kid": "Milo" },
+    { "date": "2026-08-06", "kid": "Agustín" },
+    { "date": "2026-08-07", "kid": "Oliver" },
+    { "date": "2026-08-10", "kid": "Blue" },
+    { "date": "2026-08-11", "kid": "Eva" },
+    { "date": "2026-08-12", "kid": "Víctor" },
+    { "date": "2026-08-13", "kid": "Diego" },
+    { "date": "2026-08-14", "kid": "Amanda" },
+    { "date": "2026-08-17", "kid": "Martina" },
+    { "date": "2026-08-18", "kid": "Mila" },
+    { "date": "2026-08-19", "kid": "Sol" },
+    { "date": "2026-08-20", "kid": "Borja" },
+    { "date": "2026-08-21", "kid": "Aurora" },
+    { "date": "2026-08-24", "kid": "Liam" },
+    { "date": "2026-08-25", "kid": "Milo" },
+    { "date": "2026-08-26", "kid": "Agustín" },
+    { "date": "2026-08-27", "kid": "Oliver" },
+    { "date": "2026-08-28", "kid": "Blue" },
+    { "date": "2026-08-31", "kid": "Aurora" },
+    { "date": "2026-09-01", "kid": "Diego" },
+    { "date": "2026-09-02", "kid": "Eva" },
+    { "date": "2026-09-03", "kid": "Blue" },
+    { "date": "2026-09-04", "kid": "Víctor" },
+    { "date": "2026-09-07", "kid": "Mila" },
+    { "date": "2026-09-08", "kid": "Sol" },
+    { "date": "2026-09-09", "kid": "Borja" },
+    { "date": "2026-09-10", "kid": "Oliver" },
+    { "date": "2026-09-11", "kid": "Agustín" },
+    { "date": "2026-09-22", "kid": "Martina" },
+    { "date": "2026-09-23", "kid": "Liam" },
+    { "date": "2026-09-24", "kid": "Milo" },
+    { "date": "2026-09-25", "kid": "Amanda" },
+    { "date": "2026-09-28", "kid": "Víctor" },
+    { "date": "2026-09-29", "kid": "Diego" },
+    { "date": "2026-09-30", "kid": "Eva" }
+  ],
+  "events": [
+    {
+      "date": "2026-09-01",
+      "title": "Vacunación escolar",
+      "audience": "todos",
+      "note": "Puesta al día de vacuna SRP para Preescolar a 3° básico, según Programa Nacional de Inmunizaciones."
+    },
+    {
+      "date": "2026-09-11",
+      "title": "Acto de Fiestas Patrias",
+      "audience": "todos",
+      "note": "Asistir con la vestimenta típica enviada por el colegio para el curso."
+    },
+    {
+      "date": "2026-09-05",
+      "title": "Cambio de Hora",
+      "audience": "todos",
+      "note": "A las 23:59 horas del sábado 5 de septiembre, el reloj pasará a ser la 01:00"
+    }
+  ],
+  "attachments": [
+    {
+      "date": "2026-09-11",
+      "file": "attachments/Casa de Niños.docx",
+      "label": "Vestimenta Acto de Fiestas Patrias"
+    }
+  ],
+  "restrictions": [
+    { "restriction": "Gluten", "kid": "" }
+  ]
+}

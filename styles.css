@@ -56,14 +56,20 @@ body {
   flex: none;
 }
 
-.eyebrow {
-  margin: 0;
-  font-family: "Montserrat", system-ui, sans-serif;
-  font-weight: 700;
-  font-size: .78rem;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--teal-deep);
+.eyebrow-wrap {
+  display: inline-flex;
+}
+
+.mini-select {
+  max-width: 10rem;
+  padding: .4rem .5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: .8rem;
+  cursor: pointer;
 }
 
 h1 {
@@ -485,17 +491,6 @@ h1 {
 .kid-picker-mini {
   flex: none;
   padding-top: .2rem;
-}
-
-.kid-picker-mini select {
-  max-width: 8.5rem;
-  padding: .4rem .5rem;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--card);
-  color: var(--ink);
-  font-family: inherit;
-  font-size: .8rem;
 }
 
 .err {
