@@ -54,6 +54,28 @@ function readTable(sheetName) {
   });
 }
 
+/**
+ * Reemplaza las filas de datos (fila 4 en adelante) de una pestaña.
+ * `records` es un arreglo de objetos { "Nombre de columna": valor }; el orden
+ * real de las columnas se lee de la fila 3, igual que hace readTable().
+ */
+function writeTable(sheetName, records) {
+  const sheet = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  if (!sheet) throw new Error("No existe la pestaña: " + sheetName);
+  const headers = sheet.getRange(3, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const numCols = headers.filter(function (h) { return h !== "" && h !== null; }).length;
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= 4) {
+    sheet.getRange(4, 1, lastRow - 3, sheet.getLastColumn()).clearContent();
+  }
+  if (records.length) {
+    const rows = records.map(function (rec) {
+      return headers.slice(0, numCols).map(function (h) { return rec[h] !== undefined ? rec[h] : ""; });
+    });
+    sheet.getRange(4, 1, rows.length, numCols).setValues(rows);
+  }
+}
+
 function fmtDate(v) {
   if (v === "" || v === null || v === undefined) return "";
   if (v instanceof Date) {
@@ -189,6 +211,92 @@ function publish() {
   return { ok: true, curso: schedule.curso };
 }
 
+/**
+ * Deshace cambios sin publicar: trae lo que hay AHORA MISMO en GitHub y
+ * sobreescribe las pestañas de datos con eso. No toca Contactos,
+ * Notificaciones, ni las filas de Config que no se publican (Alias, ID de
+ * Grupo WhatsApp), porque esas nunca salen hacia GitHub.
+ */
+function revertFromGithub() {
+  const scheduleRes = githubRequest("get", SCHEDULE_PATH);
+  const announcementsRes = githubRequest("get", ANNOUNCEMENTS_PATH);
+  if (scheduleRes.code !== 200 || announcementsRes.code !== 200) {
+    throw new Error("No se pudo leer desde GitHub (código " + scheduleRes.code + "/" + announcementsRes.code + ").");
+  }
+  const schedule = JSON.parse(
+    Utilities.newBlob(Utilities.base64Decode(JSON.parse(scheduleRes.body).content)).getDataAsString()
+  );
+  const announcements = JSON.parse(
+    Utilities.newBlob(Utilities.base64Decode(JSON.parse(announcementsRes.body).content)).getDataAsString()
+  );
+
+  const configSheet = SpreadsheetApp.getActive().getSheetByName("Config");
+  const configHeaders = configSheet.getRange(3, 1, 1, configSheet.getLastColumn()).getValues()[0];
+  const campoCol = configHeaders.indexOf("Campo") + 1;
+  const valorCol = configHeaders.indexOf("Valor") + 1;
+  const configValues = configSheet.getDataRange().getValues();
+  for (let i = 3; i < configValues.length; i++) {
+    const campo = configValues[i][campoCol - 1];
+    if (campo === "Curso") configSheet.getRange(i + 1, valorCol).setValue(schedule.curso);
+    if (campo === "Inicio de rotación (rotationStart)") configSheet.getRange(i + 1, valorCol).setValue(schedule.rotationStart);
+  }
+
+  writeTable("Rotacion", (schedule.kids || []).map(function (k) { return { "Niño/a": k }; }));
+
+  const dowNames = { "1": "Lunes", "2": "Martes", "3": "Miércoles", "4": "Jueves", "5": "Viernes" };
+  writeTable("Colaciones", ["1", "2", "3", "4", "5"]
+    .filter(function (k) { return schedule.weekdays[k]; })
+    .map(function (k) { return { "Día": dowNames[k], "Colación": schedule.weekdays[k] }; }));
+
+  writeTable("Cierres", (schedule.closures || []).map(function (c) {
+    return {
+      "Fecha inicio": c.date || c.from,
+      "Fecha fin": c.date ? "" : c.to,
+      "Motivo": c.reason || "",
+      "Tipo": c.type === "sinColacion" ? "sinColacion" : "sinClases"
+    };
+  }));
+
+  writeTable("Historial", (schedule.history || []).map(function (h) {
+    return { "Fecha": h.date, "Niño/a": h.kid };
+  }));
+
+  writeTable("Eventos", (schedule.events || []).map(function (e) {
+    const audience = !e.audience || e.audience === "todos"
+      ? "Todos"
+      : (Array.isArray(e.audience) ? e.audience.join(", ") : e.audience);
+    return {
+      "Fecha inicio": e.date || e.from,
+      "Fecha fin": e.date ? "" : e.to,
+      "Hora": e.time || "",
+      "Título": e.title || "",
+      "Audiencia": audience,
+      "Nota": e.note || "",
+      "Lugar": e.place || ""
+    };
+  }));
+
+  writeTable("Adjuntos", (schedule.attachments || []).map(function (a) {
+    return {
+      "Fecha": a.date,
+      "Tipo": a.link ? "Enlace" : "Archivo",
+      "Valor": a.link || a.file || "",
+      "Etiqueta": a.label || ""
+    };
+  }));
+
+  writeTable("Restricciones", (schedule.restrictions || []).map(function (r) {
+    return { "Restricción": r.restriction, "Niño/a": r.kid || "" };
+  }));
+
+  writeTable("Avisos", announcements.map(function (a) {
+    return { "Fecha": a.date, "Título": a.title, "Cuerpo": a.body };
+  }));
+
+  PropertiesService.getDocumentProperties().deleteProperty(DIRTY_KEY);
+  return { ok: true, curso: schedule.curso };
+}
+
 /* ============================================================
  * WHATSAPP — recordatorios por Home Assistant
  *
@@ -220,18 +328,19 @@ function setupContactsAndNotificationsTabs() {
     const sh = ss.insertSheet("Notificaciones");
     sh.getRange(1, 1).setValue(
       "Placeholders Diario: {nino} {fecha} {dia_semana} {colacion} {tags}. " +
-      "Placeholders Semanal: {semana} {novedades} (novedades ya trae su propio salto de línea, solo úsalo pegado a {semana}). " +
+      "Placeholders Semanal: {semana} {novedades} {primer_dia_semana} (novedades ya trae su propio salto de línea, solo úsalo pegado a {semana}; primer_dia_semana es el lunes de esa semana, ej. 08-Septiembre). " +
       "Hora en formato HH:mm, en punto o :15/:30/:45 (el chequeo corre cada 15 min). " +
-      "Activo=FALSE desactiva ese recordatorio sin borrar la fila."
+      "Activo=FALSE desactiva ese recordatorio sin borrar la fila. " +
+      "Todo mensaje sale con un aviso de \"mensaje automático\" agregado desde Home Assistant, no hace falta escribirlo aquí."
     );
     sh.getRange(3, 1, 1, 6).setValues([["Recordatorio", "Activo", "DíaSemana", "DíasAntes", "Hora", "Mensaje"]]);
     sh.getRange(4, 1, 1, 6).setValues([[
       "Diario", "TRUE", "", 1, "09:00",
-      "Hola! Mañana {dia_semana} {fecha} le toca a {nino} llevar la colación 🍽️ {colacion} {tags}"
+      "Hola! El día {dia_semana} {fecha} le toca a {nino} llevar la colación compartida: \n🍽️ {colacion} {tags}"
     ]]);
     sh.getRange(5, 1, 1, 6).setValues([[
       "Semanal", "TRUE", "Viernes", "", "09:00",
-      "Hola! La colación compartida para la próxima semana queda así:\n{semana}{novedades}"
+      "Hola! La colación compartida de la semana del {primer_dia_semana} queda así:\n{semana}{novedades}"
     ]]);
     sh.setColumnWidth(6, 420);
   }
@@ -326,6 +435,14 @@ function novedadFechaEs(d) {
   const mes = MESES_ES[d.getMonth()];
   const mesCap = mes.charAt(0).toUpperCase() + mes.slice(1);
   return dow + " " + dd + "-" + mesCap;
+}
+
+/** "01-Septiembre" — usado como {primer_dia_semana} en el resumen semanal. */
+function soloFechaEs(d) {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mes = MESES_ES[d.getMonth()];
+  const mesCap = mes.charAt(0).toUpperCase() + mes.slice(1);
+  return dd + "-" + mesCap;
 }
 
 /* ---------- rotación (portado de app.js — misma lógica que usa el sitio) ---------- */
@@ -548,7 +665,8 @@ function buildWeeklyMessageAndSend(conf, monday) {
 
   const message = fillTemplate(conf.mensaje, {
     semana: lines.join("\n"),
-    novedades: novedades
+    novedades: novedades,
+    primer_dia_semana: soloFechaEs(monday)
   });
 
   sendWhatsapp(groupId + "@g.us", message);

@@ -6,6 +6,7 @@
   button { width: 100%; padding: 10px; border: none; border-radius: 8px; background: #1C8E79; color: white; font-size: 14px; cursor: pointer; margin-bottom: 8px; }
   button:disabled { background: #ccc; cursor: not-allowed; }
   button.ghost { background: #fff; color: #1C8E79; border: 1px solid #1C8E79; }
+  button.danger { background: #fff; color: #B3261E; border: 1px solid #B3261E; }
   #msg { margin-top: 4px; margin-bottom: 16px; font-size: 12px; color: #666; white-space: pre-wrap; }
   h3 { font-size: 13px; margin: 18px 0 8px; border-top: 1px solid #ddd; padding-top: 14px; }
   input[type="date"] { width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
@@ -16,10 +17,13 @@
 <button id="btn" disabled>Publicar a GitHub</button>
 <div id="msg"></div>
 
-<h3>Pruebas manuales de WhatsApp</h3>
+<button id="btnRevert" class="danger">↩️ Deshacer cambios (volver a lo publicado)</button>
+<div id="msgRevert" class="testmsg" style="display:none"></div>
+
+<h3>Forzar Notificaciones 📤</h3>
 
 <button id="btnWeeklyNext" class="ghost">Enviar semanal — próxima semana</button>
-<button id="btnWeeklyThis" class="ghost">Enviar semanal — esta semana</button>
+<button id="btnWeeklyThis" class="ghost">Enviar semanal — de esta semana</button>
 <div id="msgWeekly" class="testmsg" style="display:none"></div>
 
 <input type="date" id="dailyDate">
@@ -85,6 +89,31 @@
         button.disabled = false;
       })[fn].apply(null, args);
   }
+
+  document.getElementById('btnRevert').addEventListener('click', function () {
+    var ok = confirm(
+      'Esto va a reemplazar Rotación, Colaciones, Cierres, Historial, Eventos, Adjuntos, Restricciones y Avisos ' +
+      'con lo que hay AHORA MISMO publicado en GitHub, descartando cualquier cambio sin publicar.\n\n' +
+      'Contactos, Notificaciones, Alias e ID de Grupo WhatsApp no se tocan.\n\n¿Continuar?'
+    );
+    if (!ok) return;
+    var btn = this;
+    btn.disabled = true;
+    var box = document.getElementById('msgRevert');
+    box.style.display = 'block';
+    box.textContent = 'Restaurando…';
+    google.script.run
+      .withSuccessHandler(function (r) {
+        box.textContent = '✅ Restaurado a lo publicado (' + r.curso + ')';
+        btn.disabled = false;
+        refresh();
+      })
+      .withFailureHandler(function (err) {
+        box.textContent = '❌ Error: ' + err.message;
+        btn.disabled = false;
+      })
+      .revertFromGithub();
+  });
 
   document.getElementById('btnWeeklyNext').addEventListener('click', function () {
     runTest('testWeekly', ['next'], 'msgWeekly', this);
