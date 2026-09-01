@@ -568,6 +568,15 @@ function buildShareSnapshot(anchor) {
   table.append(thead, tbody);
 
   wrap.append(nav, table);
+
+  const events = document.getElementById("monthEvents");
+  if (!events.hidden) {
+    const eventsClone = events.cloneNode(true);
+    eventsClone.hidden = false;
+    eventsClone.querySelectorAll(".event-mine").forEach((li) => li.classList.remove("event-mine"));
+    wrap.append(eventsClone);
+  }
+
   document.body.append(wrap);
   return wrap;
 }
