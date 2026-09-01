@@ -1,102 +1,103 @@
-# Recordatorio por WhatsApp desde Home Assistant
+# Recordatorios de WhatsApp vía Home Assistant
 
-Manda un mensaje al **grupo** de apoderados la tarde anterior al turno.
-No guarda correos ni telefonos de nadie: el mensaje va al grupo, no a cada apoderado.
+Google Sheets calcula a quién le toca colación y arma el texto del mensaje
+(ver [../sheets-sync/README.md](../sheets-sync/README.md)); Home Assistant
+solo recibe un webhook con `{ target, message }` y lo reenvía por WhatsApp.
+Home Assistant nunca toca el Sheet ni sabe nada de la rotación — es un
+reenviador tonto, a propósito, así toda la lógica de negocio vive en un solo
+lugar (Apps Script).
 
-## 1. Copiar el script
+## Requisitos
 
-Deja `colacion.py` en `/config/scripts/colacion.py` y edita la constante `URL`
-con la direccion de tu sitio publicado.
+- El addon/integración **[ha-whatsapp](https://github.com/FaserF/ha-whatsapp)**
+  (de FaserF) instalado y vinculado a una cuenta de WhatsApp (se escanea un
+  QR una vez). Expone el servicio `whatsapp.send_message`.
+- Acceso remoto a Home Assistant para que el webhook sea alcanzable desde
+  Apps Script (acá se usa **Nabu Casa**, así que la URL del webhook es del
+  tipo `https://hooks.nabu.casa/...`; sirve cualquier otro método de
+  exposición remota de HA).
 
-Pruebalo primero desde el terminal del host:
+## 1. Automatización
 
-```bash
-python3 /config/scripts/colacion.py
-```
+**Settings → Automations → Create → Add trigger → Webhook**. HA genera un
+`webhook_id` único — esa es la parte "secreta" de la URL, no se comparte ni
+se sube a ningún repo.
 
-Debe imprimir una linea de JSON con el proximo dia habil que tenga algo que avisar.
-
-## 2. Sensor
-
-En `configuration.yaml`:
-
-```yaml
-command_line:
-  - sensor:
-      name: Colacion proximo turno
-      command: "python3 /config/scripts/colacion.py"
-      value_template: "{{ value_json.estado }}"
-      json_attributes:
-        - fecha
-        - dia
-        - comida
-        - nino
-        - sin_colacion
-        - eventos
-        - mensaje
-      scan_interval: 3600
-```
-
-El estado es el nombre del niño, o `sin_turno` / `nada`. El texto listo para mandar
-queda en el atributo `mensaje`.
-
-## 3. Automatizacion
-
-Busca el ID del grupo una vez con el servicio `whatsapp.get_groups` y reemplazalo abajo.
-Usar `group_id` y no `group` evita que la automatizacion se rompa si alguien
-renombra el grupo.
+Automatización completa:
 
 ```yaml
-automation:
-  - alias: Aviso de colacion al grupo
-    triggers:
-      - trigger: time
-        at: "18:30:00"
-    conditions:
-      - condition: template
-        value_template: >
-          {{ state_attr('sensor.colacion_proximo_turno', 'fecha')
-             == (now() + timedelta(days=1)).strftime('%Y-%m-%d') }}
-    actions:
-      - action: homeassistant.update_entity
-        target:
-          entity_id: sensor.colacion_proximo_turno
-      - delay: "00:00:05"
-      - action: whatsapp.send_message
-        data:
-          group_id: "120363012345678901"
-          message: "{{ state_attr('sensor.colacion_proximo_turno', 'mensaje') }}"
+alias: Huelquen - Whatsapp Colación Webhook
+triggers:
+  - webhook_id: TU_WEBHOOK_ID_AQUI
+    allowed_methods: [POST]
+    local_only: false
+    trigger: webhook
+actions:
+  - data:
+      target: "{{ trigger.json.target }}"
+      message: "_NOTA: Este es un mensaje automático 🤖_\n\n{{ trigger.json.message }}"
+    action: whatsapp.send_message
 ```
 
-La condicion hace que solo avise la vispera. Si el proximo turno es el lunes y hoy
-es viernes, el aviso no sale: para eso, cambia la condicion a que el sensor tenga
-`mensaje` y agrega una automatizacion de viernes. Es mas simple mandar el aviso el
-mismo viernes en la tarde para el lunes; el script ya resuelve el salto de feriados
-y fines de semana.
+Puntos importantes:
 
-## 4. Encuestas para paseos y reuniones
+- `local_only: false` es necesario para que el webhook responda cuando
+  llega desde fuera de la red local (Apps Script corre en los servidores de
+  Google, no en tu LAN).
+- El disclaimer `_NOTA: Este es un mensaje automático 🤖_` se agrega **acá**,
+  no en la plantilla del Sheet — es la única forma de garantizar que nunca
+  se pueda perder editando el mensaje desde Sheets. El `_..._` es cursiva
+  nativa de WhatsApp.
+- Las comillas dobles en el YAML son necesarias: con comillas simples
+  Jinja/YAML no interpreta `\n` como salto de línea real.
 
-Para las actividades de `events` sirve mas una encuesta que un mensaje:
+## 2. Contrato del webhook
 
-```yaml
-- action: whatsapp.send_poll
-  data:
-    group_id: "120363012345678901"
-    message: "Paseo a Farellones — ¿van?"
-    options: ["Sí, vamos", "No podemos", "Aviso despues"]
+Apps Script (`sendWhatsapp()` en `Code.gs`) hace un POST con:
+
+```json
+{ "target": "56912345678@s.whatsapp.net", "message": "texto ya armado" }
 ```
 
-Los votos llegan de vuelta como evento `whatsapp_poll_vote_received`.
+`target` llega **completo**, con el sufijo correcto según el tipo de
+destinatario:
 
-## Advertencias
+| Destinatario | Formato de `target` |
+|---|---|
+| Un apoderado (recordatorio diario) | `<telefono>@s.whatsapp.net` |
+| El grupo del curso (resumen semanal) | `<idDeGrupo>@g.us` |
 
-- El puente usa `whatsapp-web.js`, que **no** es oficial. Se conecta como dispositivo
-  vinculado a tu cuenta personal. WhatsApp no permite clientes no oficiales y el
-  bloqueo de la cuenta es un riesgo real.
-- Manda al grupo, no a cada apoderado por separado. Doce mensajes automaticos a
-  numeros que quizas no te tienen agendado es justo el patron que gatilla bloqueos.
-- Fija la version de la imagen en vez de usar `:latest`. Una actualizacion del puente
-  puede romper la sesion.
-- La sesion se cae de vez en cuando y hay que volver a escanear el QR. Agrega una
-  automatizacion que te avise a ti si el sensor queda en `unavailable`, para no
-  descubrirlo el dia que no llego la colacion.
+La automatización solo reenvía `trigger.json.target` y
+`trigger.json.message` tal cual — no arma el JID ni decide a quién va.
+
+## 3. Cómo obtener el `idDeGrupo`
+
+`ha-whatsapp` expone (según versión del addon) un servicio para listar
+grupos, ej. `whatsapp.get_groups`, desde **Developer Tools → Actions** en
+Home Assistant. El id viene sin el sufijo `@g.us` — agrégalo tú al pegarlo
+en la fila "ID de Grupo WhatsApp" de la pestaña Config del Sheet (el script
+ya le agrega `@g.us` al armar el `target`, no lo dupliques ahí).
+
+## Formato de texto en WhatsApp
+
+| Sintaxis | Resultado |
+|---|---|
+| `*texto*` | **negrita** |
+| `_texto_` | _cursiva_ |
+| `~texto~` | ~~tachado~~ |
+| `` ```texto``` `` | monoespaciado |
+
+No existe forma de mencionar (`@apoderado`) con notificación real desde
+`whatsapp.send_message` — el addon no expone ningún parámetro de mención.
+Por eso el mensaje semanal usa negrita en el día/niño en vez de tags, y el
+mensaje diario, si quiere mostrar el nombre del apoderado, lo hace como
+texto plano (`{tags}` en la plantilla del Sheet).
+
+## Seguridad
+
+- La URL del webhook (`HA_WEBHOOK_URL`) es un secreto: vive solo en las
+  **Script Properties** del Apps Script de cada Sheet, nunca en este repo.
+  Si se filtra, cualquiera puede mandar WhatsApps arbitrarios a través de
+  esta automatización — regenerar el `webhook_id` si eso pasa.
+- Los teléfonos y el `idDeGrupo` tampoco están en este repo: viven en las
+  pestañas Contactos/Config de cada Sheet.

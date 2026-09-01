@@ -1,118 +1,128 @@
-# Colación compartida
+# Colación compartida — Colegio Huelquén
 
-Sitio estático para el calendario de colación de un curso. Sin servidor, sin build.
-Toda la información vive en `data/schedule.json` y `data/announcements.json`.
+Sitio estático con el calendario de colación compartida de varios cursos
+(Casa de Niños 1, Casa de Niños 2, …), publicado en GitHub Pages. Los
+apoderados no editan nada aquí: el contenido lo administran las delegadas
+desde Google Sheets, y un script lo publica a este repo.
 
-## Publicar en GitHub Pages
+```
+Google Sheets (privado, un Sheet por curso)
+      │  Apps Script: botón "Publicar a GitHub"
+      ▼
+data/<curso>/schedule.json + announcements.json  (este repo, público)
+      │  GitHub Pages
+      ▼
+index.html / app.js / styles.css  (lo que ve el apoderado)
+
+Google Sheets ──Apps Script: webhook──▶ Home Assistant ──ha-whatsapp──▶ WhatsApp
+  (pestañas Contactos/Notificaciones, NUNCA salen del Sheet)
+```
+
+Dos sistemas comparten la misma lógica de rotación pero corren por separado:
+el **sitio** (lee los JSON publicados, sin backend) y los **recordatorios de
+WhatsApp** (Apps Script calcula el turno y llama a un webhook de Home
+Assistant; no depende de que el sitio esté abierto).
+
+## Estructura del repo
+
+| Ruta | Qué es |
+|---|---|
+| `index.html`, `app.js`, `styles.css` | El sitio. Sin build, sin dependencias. |
+| `data/courses.json` | Manifiesto: qué cursos existen y dónde está el JSON de cada uno. |
+| `data/casa-de-ninos-1/`, `data/casa-de-ninos-2/` | `schedule.json` + `announcements.json` de cada curso. Los genera el Sheet — no editar a mano. |
+| `attachments/` | Archivos adjuntos referenciados desde `schedule.json` (`attachments[].file`). |
+| `sheets-sync/` | Apps Script (`Code.gs`) + panel lateral (`Sidebar.html`) que van pegados en cada Google Sheet. Ver [sheets-sync/README.md](sheets-sync/README.md). |
+| `homeassistant/` | Cómo queda la automatización de Home Assistant que recibe el webhook y manda el WhatsApp. Ver [homeassistant/README.md](homeassistant/README.md). |
+| `manifest.json`, `robots.txt`, `.nojekyll` | Config del sitio / GitHub Pages. `.nojekyll` es obligatorio para que Pages sirva `data/` tal cual. |
+
+## Publicar en GitHub Pages (si hay que rehacerlo desde cero)
 
 ```bash
-cd lonchera
-git init -b main
-git add .
-git commit -m "Calendario de colación"
-gh repo create colacion-kinder --public --source=. --push
-gh api -X POST repos/:owner/colacion-kinder/pages -f build_type=legacy \
+gh repo create nsalazar/colaciones --public --source=. --push
+gh api -X POST repos/nsalazar/colaciones/pages -f build_type=legacy \
   -f 'source[branch]=main' -f 'source[path]=/'
 ```
 
-Queda en `https://<tu-usuario>.github.io/colacion-kinder/`. Tarda 1–2 minutos la primera vez.
+Queda en `https://nsalazar.github.io/colaciones/`. La primera vez tarda 1–2
+minutos en propagarse.
 
-## Ver antes de publicar
+## Ver el sitio localmente antes de publicar
 
 ```bash
 python3 -m http.server 8000
 ```
 
-Abre `http://localhost:8000`. No sirve abrir `index.html` con doble clic: el navegador
-bloquea la lectura de los JSON con `file://`.
+Abrir `http://localhost:8000`. No sirve doble clic sobre `index.html`: el
+navegador bloquea la lectura de los JSON con `file://`.
 
-## Cómo funciona la rotación
+## Esquema de datos
 
-`rotationStart` es el primer día del turno del primer niño de la lista `kids`.
-Desde ahí el sitio recorre los días hábiles y va asignando en orden, saltándose
-todo lo que esté en `skipDates`. Nadie tiene que editar nada semana a semana.
-
-`weekdays` define el tipo de comida por día (`1` = lunes … `5` = viernes).
-Si un día no aparece en `weekdays`, ese día no hay colación.
-
-### Cambios entre apoderados
-
-Un cambio son dos entradas en `overrides`, una por cada fecha:
+### `data/courses.json`
 
 ```json
-"overrides": [
-  { "date": "2026-09-02", "kid": "Joaquín Bravo",  "note": "cambio con Catalina" },
-  { "date": "2026-09-10", "kid": "Catalina Muñoz", "note": "cambio con Joaquín" }
+[
+  {
+    "id": "casa-de-ninos-1",
+    "alias": "CN1",
+    "name": "Casa de Niños 1",
+    "schedule": "data/casa-de-ninos-1/schedule.json",
+    "announcements": "data/casa-de-ninos-1/announcements.json"
+  }
 ]
 ```
 
-El `note` se muestra como etiqueta naranja al lado de la comida. Los `overrides`
-no alteran la rotación de fondo: solo reemplazan al niño de esa fecha puntual.
+El sitio lee este manifiesto para poblar el selector de curso. Agregar un
+curso nuevo es agregar una entrada aquí + crear su carpeta en `data/` (ver
+[sheets-sync/README.md](sheets-sync/README.md#agregar-un-curso-nuevo)).
 
-### Días sin colación
-
-Los sábados y domingos ya están fuera: la rotación solo recorre lunes a viernes.
-Todo lo demás va en `closures`, que acepta un día suelto o un rango:
+### `data/<curso>/schedule.json`
 
 ```json
-"closures": [
-  { "from": "2026-07-13", "to": "2026-07-24", "reason": "Vacaciones de invierno" },
-  { "date": "2026-09-18", "reason": "Fiestas Patrias" },
-  { "date": "2026-09-30", "type": "sinColacion", "reason": "Aniversario, hay catering" }
-]
+{
+  "curso": "Casa de Niños 1",
+  "rotationStart": "2026-10-01",
+  "weekdays": { "1": "Yogurt con cereal o granola", "2": "Pan…", "5": "Queque casero" },
+  "kids": ["Clemente A", "Sebastián", "…"],
+  "closures": [
+    { "date": "2026-09-21", "reason": "Feriado" },
+    { "from": "2026-09-14", "to": "2026-09-18", "reason": "Vacaciones" },
+    { "date": "2026-11-05", "type": "sinColacion", "reason": "Aniversario, hay catering" }
+  ],
+  "history": [ { "date": "2026-07-07", "kid": "Noelle" } ],
+  "events": [
+    { "date": "2026-09-11", "title": "Acto de Fiestas Patrias", "audience": "todos", "note": "…" }
+  ],
+  "attachments": [
+    { "date": "2026-09-11", "file": "attachments/Casa de Niños.docx", "label": "Vestimenta" }
+  ],
+  "restrictions": []
+}
 ```
 
-Hay dos tipos, y la diferencia importa:
+- **`rotationStart`**: fecha en la que le tocó al primer niño de `kids`. Desde
+  ahí el sitio recorre días hábiles y asigna en orden, saltándose `closures`.
+  `history` son asignaciones fijas para fechas pasadas (no se recalculan).
+- **`weekdays`**: `"1"`=lunes … `"5"`=viernes. Un día ausente = sin colación
+  ese día de la semana.
+- **`closures`**: un día suelto (`date`) o un rango (`from`/`to`). Sin `type`
+  (o `"sinClases"`) es feriado/vacaciones — el turno se salta y se corre al
+  siguiente día hábil. `"type": "sinColacion"` es día con clases pero sin
+  colación (ej. hay catering) — también corre el turno.
+- **`events`**: independiente de la rotación. `audience` es `"todos"` o una
+  lista de nombres.
+- **`attachments`**: `file` (ruta dentro del repo, bajo `attachments/`) o
+  `link` (URL externa).
+- **`restrictions`**: `{ restriction, kid }`, `kid` vacío = aplica a todos.
 
-- **Sin `type`** (por defecto, `sinClases`): feriado o vacaciones. El día aparece
-  apagado y nadie tiene que hacer nada.
-- **`"type": "sinColacion"`**: hay clases pero ese día no se manda comida. Aparece
-  destacado en naranjo con el motivo, para que nadie mande colación por costumbre.
+### `data/<curso>/announcements.json`
 
-En los dos casos el turno **no se pierde**: se corre al siguiente día hábil, así que
-la rotación sigue pareja. Los rangos largos, como vacaciones de verano, funcionan igual.
+Lista de `{ date, title, body }`, más nuevo primero.
 
-Los feriados chilenos cambian poco: conviene cargar los del año de una vez en marzo
-(están en feriados.cl o en la API de feriados del gobierno) en vez de automatizarlo.
-Son unas 15 fechas al año.
+## Recordatorios por WhatsApp
 
-## Avisos
-
-`data/announcements.json` es una lista de `{ date, title, body }`. Se ordenan solos
-por fecha, del más nuevo al más antiguo. Borra los viejos cuando quieras.
-
-## Actividades de curso
-
-`events` es independiente de la rotación: son cosas que involucran a varios o a todos
-los apoderados. Se muestran pegadas al día que corresponde, sin alterar el turno de colación.
-
-```json
-"events": [
-  { "date": "2026-10-08", "time": "19:00", "title": "Reunión de apoderados",
-    "audience": "todos", "place": "Sala Kínder B" },
-  { "from": "2026-11-05", "to": "2026-11-06", "title": "Paseo a Farellones",
-    "audience": "todos", "note": "Llevar parka y almuerzo" },
-  { "date": "2026-10-20", "title": "Turno de decoración",
-    "audience": ["Diego Fuentes", "Emilia Cortés"] }
-]
-```
-
-`audience` es `"todos"` o una lista de niños. Si el apoderado eligió su hijo abajo,
-las actividades que le tocan se destacan en naranjo.
-
-## Recordatorios (opcional)
-
-Los contactos **no van en este repo**: es público. La forma más simple es una planilla
-de Google privada con `niño | apoderado | correo`, y un Apps Script con trigger diario
-que lee `data/schedule.json` desde el sitio publicado, busca el turno de pasado mañana
-y manda el correo. Sin llaves de API, sin servidor, y la directiva puede editar la
-planilla sin tocar git.
-
-## Notas
-
-- Cada apoderado elige su hijo o hija una vez; queda en `localStorage` de su teléfono
-  y el sitio le muestra arriba cuándo le toca. No hay cuentas ni backend.
-- El botón de compartir arma el texto de la semana y abre el menú nativo del teléfono
-  (o lo copia al portapapeles en desktop).
-- El sitio incluye `robots.txt` y `noindex` para que no aparezca en Google. Aun así
-  la URL es pública: cualquiera que la tenga puede entrar.
+Los teléfonos **no viven en este repo** (es público). Viven en la pestaña
+Contactos de cada Google Sheet, que nunca se publica. El flujo completo —
+qué pestañas hay, cómo se instala el Apps Script, cómo se configuran los
+recordatorios — está en [sheets-sync/README.md](sheets-sync/README.md); la
+automatización de Home Assistant que efectivamente manda el mensaje está en
+[homeassistant/README.md](homeassistant/README.md).
