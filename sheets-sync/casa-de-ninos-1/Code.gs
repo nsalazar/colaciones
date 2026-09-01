@@ -62,10 +62,14 @@ function fmtDate(v) {
   return String(v).trim();
 }
 
-function buildSchedule() {
-  const cfgRows = readTable("Config");
+function readConfigMap() {
   const cfg = {};
-  cfgRows.forEach(function (r) { cfg[r["Campo"]] = r["Valor"]; });
+  readTable("Config").forEach(function (r) { cfg[r["Campo"]] = r["Valor"]; });
+  return cfg;
+}
+
+function buildSchedule() {
+  const cfg = readConfigMap();
 
   const dowMap = { "Lunes": "1", "Martes": "2", "Miércoles": "3", "Jueves": "4", "Viernes": "5" };
   const weekdays = {};
@@ -232,7 +236,18 @@ function setupContactsAndNotificationsTabs() {
     sh.setColumnWidth(6, 420);
   }
 
-  SpreadsheetApp.getUi().alert("Listo. Revisa las pestañas Contactos y Notificaciones y completa tus datos.");
+  const configSheet = ss.getSheetByName("Config");
+  const configRows = readTable("Config");
+  const hasGroupRow = configRows.some(function (r) { return r["Campo"] === "ID de Grupo WhatsApp"; });
+  if (configSheet && !hasGroupRow) {
+    configSheet.getRange(configSheet.getLastRow() + 1, 1, 1, 2).setValues([["ID de Grupo WhatsApp", ""]]);
+  }
+
+  SpreadsheetApp.getUi().alert(
+    "Listo. Revisa las pestañas Contactos y Notificaciones, completa tus datos, y en Config " +
+    "agrega el \"ID de Grupo WhatsApp\" si quieres que el resumen semanal se envíe al grupo del curso " +
+    "(vacío = no se envía)."
+  );
 }
 
 /* ---------- fechas (mismo enfoque que el sitio, sin drift de UTC) ---------- */
@@ -358,20 +373,24 @@ function fillTemplate(tpl, data) {
   });
 }
 
-/* ---------- envío ---------- */
+/* ---------- envío ----------
+ * `target` ya debe venir como JID completo:
+ *   - número individual: "56912345678@s.whatsapp.net"
+ *   - grupo:             "<idDeGrupo>@g.us"
+ */
 
-function sendWhatsapp(phone, message) {
+function sendWhatsapp(target, message) {
   const url = PropertiesService.getScriptProperties().getProperty("HA_WEBHOOK_URL");
   if (!url) throw new Error("Falta configurar HA_WEBHOOK_URL en Script Properties.");
   UrlFetchApp.fetch(url, {
     method: "post",
     contentType: "application/json",
-    payload: JSON.stringify({ phone: phone, message: message }),
+    payload: JSON.stringify({ target: target, message: message }),
     muteHttpExceptions: true
   });
 }
 
-/* ---------- recordatorio diario ---------- */
+/* ---------- recordatorio diario (a cada apoderado, directo) ---------- */
 
 function runDailyReminder(conf) {
   const cfg = buildSchedule();
@@ -395,10 +414,10 @@ function runDailyReminder(conf) {
     tags: tagsFor(kidContacts)
   });
 
-  kidContacts.forEach(function (c) { sendWhatsapp(c.phone, message); });
+  kidContacts.forEach(function (c) { sendWhatsapp(c.phone + "@s.whatsapp.net", message); });
 }
 
-/* ---------- recordatorio semanal ---------- */
+/* ---------- recordatorio semanal (al grupo del curso) ---------- */
 
 function nextMonday(from) {
   const shift = (from.getDay() + 6) % 7; // días desde el lunes de ESTA semana
@@ -407,6 +426,9 @@ function nextMonday(from) {
 }
 
 function runWeeklyReminder(conf) {
+  const groupId = String(readConfigMap()["ID de Grupo WhatsApp"] || "").trim();
+  if (!groupId) return; // sin grupo configurado en Config -> no se envía
+
   const cfg = buildSchedule();
   const closures = expandClosuresMap(cfg.closures);
   const index = buildIndexMap(cfg, closures);
@@ -415,7 +437,6 @@ function runWeeklyReminder(conf) {
   const monday = nextMonday(new Date());
   const sunday = addDays(monday, 7);
   const lines = [];
-  const recipientPhones = {};
 
   for (let i = 0; i < 5; i++) {
     const d = addDays(monday, i);
@@ -427,7 +448,6 @@ function runWeeklyReminder(conf) {
       const kidContacts = contacts[entry.kid] || [];
       const tags = tagsFor(kidContacts);
       lines.push("- " + dowName + ": " + entry.meal + " (" + entry.kid + (tags ? " " + tags : "") + ")");
-      kidContacts.forEach(function (c) { recipientPhones[c.phone] = true; });
     } else if (closure) {
       lines.push("- " + dowName + ": " + closure.reason);
     } else {
@@ -461,7 +481,7 @@ function runWeeklyReminder(conf) {
     novedades: novedades
   });
 
-  Object.keys(recipientPhones).forEach(function (phone) { sendWhatsapp(phone, message); });
+  sendWhatsapp(groupId + "@g.us", message);
 }
 
 /**
