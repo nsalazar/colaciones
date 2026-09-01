@@ -3,13 +3,29 @@
   #status { padding: 10px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
   #status.dirty { background: #FBE9DA; color: #8A3E06; }
   #status.clean { background: #E4F2EE; color: #0F5347; }
-  button { width: 100%; padding: 10px; border: none; border-radius: 8px; background: #1C8E79; color: white; font-size: 14px; cursor: pointer; }
+  button { width: 100%; padding: 10px; border: none; border-radius: 8px; background: #1C8E79; color: white; font-size: 14px; cursor: pointer; margin-bottom: 8px; }
   button:disabled { background: #ccc; cursor: not-allowed; }
-  #msg { margin-top: 10px; font-size: 12px; color: #666; }
+  button.ghost { background: #fff; color: #1C8E79; border: 1px solid #1C8E79; }
+  #msg { margin-top: 4px; margin-bottom: 16px; font-size: 12px; color: #666; white-space: pre-wrap; }
+  h3 { font-size: 13px; margin: 18px 0 8px; border-top: 1px solid #ddd; padding-top: 14px; }
+  input[type="date"] { width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+  .testmsg { margin-top: 4px; margin-bottom: 16px; font-size: 11px; color: #444; background: #f5f5f5; border-radius: 6px; padding: 8px; white-space: pre-wrap; }
 </style>
+
 <div id="status">Cargando…</div>
 <button id="btn" disabled>Publicar a GitHub</button>
 <div id="msg"></div>
+
+<h3>Pruebas manuales de WhatsApp</h3>
+
+<button id="btnWeeklyNext" class="ghost">Enviar semanal — próxima semana</button>
+<button id="btnWeeklyThis" class="ghost">Enviar semanal — esta semana</button>
+<div id="msgWeekly" class="testmsg" style="display:none"></div>
+
+<input type="date" id="dailyDate">
+<button id="btnDaily" class="ghost">Enviar diario para esa fecha</button>
+<div id="msgDaily" class="testmsg" style="display:none"></div>
+
 <script>
   function refresh() {
     google.script.run.withSuccessHandler(function (s) {
@@ -41,6 +57,45 @@
         btn.disabled = false;
       })
       .publish();
+  });
+
+  function showResult(boxId, r) {
+    var box = document.getElementById(boxId);
+    box.style.display = 'block';
+    var lines = [];
+    lines.push(r.sent ? '✅ Enviado' : '⚠️ No se envió: ' + r.reason);
+    if (r.kid) lines.push('Niño/a: ' + r.kid);
+    if (r.phones) lines.push('A: ' + r.phones.join(', '));
+    if (r.message) lines.push('\n--- Mensaje ---\n' + r.message);
+    box.textContent = lines.join('\n');
+  }
+
+  function runTest(fn, args, boxId, button) {
+    button.disabled = true;
+    var box = document.getElementById(boxId);
+    box.style.display = 'block';
+    box.textContent = 'Enviando…';
+    google.script.run
+      .withSuccessHandler(function (r) {
+        showResult(boxId, r);
+        button.disabled = false;
+      })
+      .withFailureHandler(function (err) {
+        box.textContent = '❌ Error: ' + err.message;
+        button.disabled = false;
+      })[fn].apply(null, args);
+  }
+
+  document.getElementById('btnWeeklyNext').addEventListener('click', function () {
+    runTest('testWeekly', ['next'], 'msgWeekly', this);
+  });
+  document.getElementById('btnWeeklyThis').addEventListener('click', function () {
+    runTest('testWeekly', ['this'], 'msgWeekly', this);
+  });
+  document.getElementById('btnDaily').addEventListener('click', function () {
+    var date = document.getElementById('dailyDate').value;
+    if (!date) { alert('Elige una fecha primero.'); return; }
+    runTest('testDaily', [date], 'msgDaily', this);
   });
 
   refresh();

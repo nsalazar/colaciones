@@ -392,20 +392,20 @@ function sendWhatsapp(target, message) {
 
 /* ---------- recordatorio diario (a cada apoderado, directo) ---------- */
 
-function runDailyReminder(conf) {
+/** Arma y envía el recordatorio diario para una fecha objetivo concreta. */
+function buildDailyMessageAndSend(conf, target) {
   const cfg = buildSchedule();
   const closures = expandClosuresMap(cfg.closures);
   const index = buildIndexMap(cfg, closures);
   const contacts = readContacts();
 
-  const target = addDays(new Date(), conf.diasAntes);
   const iso = toISO(target);
   const entry = index[iso];
-  if (!entry) return; // feriado/vacaciones o sin datos ese día
+  if (!entry) {
+    return { sent: false, reason: "No hay colación asignada ese día (feriado, vacaciones o sin datos)." };
+  }
 
   const kidContacts = contacts[entry.kid] || [];
-  if (!kidContacts.length) return;
-
   const message = fillTemplate(conf.mensaje, {
     nino: entry.kid,
     fecha: longDateEs(target),
@@ -414,26 +414,40 @@ function runDailyReminder(conf) {
     tags: tagsFor(kidContacts)
   });
 
+  if (!kidContacts.length) {
+    return { sent: false, reason: "'" + entry.kid + "' no tiene contactos cargados en la pestaña Contactos.", message: message };
+  }
+
   kidContacts.forEach(function (c) { sendWhatsapp(c.phone + "@s.whatsapp.net", message); });
+  return { sent: true, message: message, kid: entry.kid, phones: kidContacts.map(function (c) { return c.phone; }) };
+}
+
+function runDailyReminder(conf) {
+  buildDailyMessageAndSend(conf, addDays(new Date(), conf.diasAntes));
 }
 
 /* ---------- recordatorio semanal (al grupo del curso) ---------- */
 
-function nextMonday(from) {
+function thisMonday(from) {
   const shift = (from.getDay() + 6) % 7; // días desde el lunes de ESTA semana
-  const thisMonday = addDays(from, -shift);
-  return addDays(thisMonday, 7);
+  return addDays(from, -shift);
 }
 
-function runWeeklyReminder(conf) {
+function nextMonday(from) {
+  return addDays(thisMonday(from), 7);
+}
+
+/** Arma y envía el resumen semanal para la semana que empieza en `monday`. */
+function buildWeeklyMessageAndSend(conf, monday) {
   const groupId = String(readConfigMap()["ID de Grupo WhatsApp"] || "").trim();
-  if (!groupId) return; // sin grupo configurado en Config -> no se envía
+  if (!groupId) {
+    return { sent: false, reason: "No hay 'ID de Grupo WhatsApp' configurado en la pestaña Config." };
+  }
 
   const cfg = buildSchedule();
   const closures = expandClosuresMap(cfg.closures);
   const index = buildIndexMap(cfg, closures);
 
-  const monday = nextMonday(new Date());
   const sunday = addDays(monday, 7);
   const lines = [];
 
@@ -479,6 +493,27 @@ function runWeeklyReminder(conf) {
   });
 
   sendWhatsapp(groupId + "@g.us", message);
+  return { sent: true, message: message };
+}
+
+function runWeeklyReminder(conf) {
+  buildWeeklyMessageAndSend(conf, nextMonday(new Date()));
+}
+
+/* ---------- pruebas manuales (llamadas desde el panel lateral) ---------- */
+
+function testWeekly(which) {
+  const conf = readNotifConfig()["Semanal"];
+  if (!conf) throw new Error("Falta la fila 'Semanal' en la pestaña Notificaciones.");
+  const monday = which === "this" ? thisMonday(new Date()) : nextMonday(new Date());
+  return buildWeeklyMessageAndSend(conf, monday);
+}
+
+function testDaily(dateStr) {
+  const conf = readNotifConfig()["Diario"];
+  if (!conf) throw new Error("Falta la fila 'Diario' en la pestaña Notificaciones.");
+  if (!dateStr) throw new Error("Elige una fecha.");
+  return buildDailyMessageAndSend(conf, parseDateLocal(dateStr));
 }
 
 /**
