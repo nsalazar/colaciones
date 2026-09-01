@@ -6,7 +6,6 @@
   "background_color": "#F1F4EC",
   "theme_color": "#F1F4EC",
   "icons": [
-    { "src": "assets/huelquen-icon.png", "sizes": "100x100", "type": "image/png" },
-    { "src": "assets/huelquen-icon.webp", "sizes": "100x100", "type": "image/webp" }
+    { "src": "assets/huelquen-icon.png", "sizes": "174x200", "type": "image/png" }
   ]
 }
