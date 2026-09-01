@@ -92,6 +92,29 @@ o en Config específicamente sobre las filas `Curso` / `Inicio de rotación
 Config (como `ID de Grupo WhatsApp`) no lo activa, porque esos datos nunca
 viajan a GitHub.
 
+## Usar el panel desde el celular
+
+La app de Google Sheets para Android/iOS **no soporta sidebars de Apps
+Script** — el menú "Colación" ni siquiera aparece. Dos opciones:
+
+1. **Sin configurar nada**: abre el Sheet en Chrome del celular (no en la
+   app) y pide "Sitio de escritorio" desde el menú del navegador. A veces
+   carga la versión completa de Sheets con el menú de Extensiones.
+2. **Panel como página web** (más confiable): `doGet()` en `Code.gs` sirve
+   el mismo `Sidebar.html` como página independiente, fuera del Sheet.
+   - En el editor de Apps Script: **Deploy → New deployment → tipo "Web
+     app"**. *Execute as*: `Me`. *Who has access*: `Only myself` (o
+     `Anyone` si algún día otra persona necesita publicar sin tener su
+     propio `GITHUB_TOKEN` — ejecuta con **tus** credenciales sin importar
+     quién abra el link, así que trata esa URL como semi-secreta).
+   - Copia la URL que termina en `/exec` y ábrela en el celular. Desde el
+     menú del navegador, **"Agregar a pantalla de inicio"** — queda como un
+     ícono más, sin distinguirse de una app nativa.
+   - Cada vez que cambies `Code.gs` o `Sidebar.html` hay que crear un
+     **New deployment** de nuevo (o editar el deployment existente) para
+     que los cambios lleguen a esa URL — a diferencia del sidebar, que
+     siempre usa la última versión guardada.
+
 ## Botones del panel lateral
 
 - **Publicar a GitHub** — corre `publish()`: arma los dos JSON desde las

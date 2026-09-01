@@ -63,6 +63,19 @@ function showSidebar() {
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
+/**
+ * Sirve el mismo panel como página web independiente (mismo Sidebar.html),
+ * para cuando el sidebar de Apps Script no está disponible — la app de
+ * Google Sheets en el celular no lo soporta, solo la versión de escritorio.
+ * Deploy > New deployment > tipo "Web app" y guardar el enlace como acceso
+ * directo en la pantalla de inicio del celular. Ver sheets-sync/README.md.
+ */
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile("Sidebar")
+    .setTitle("Colación — Panel")
+    .addMetaTag("viewport", "width=device-width, initial-scale=1");
+}
+
 function getStatus() {
   const dirty = PropertiesService.getDocumentProperties().getProperty(DIRTY_KEY) === "true";
   return { dirty: dirty };
