@@ -633,6 +633,49 @@ async function shareMonthImage() {
   }
 }
 
+/* ---------- estado en la URL (#class=&kid=) ---------- */
+
+/**
+ * Lee los parámetros desde el "#" (no recarga la página al cambiar, a
+ * diferencia de "?"). Si llega un link viejo con "?class=&kid=", los migra
+ * al "#" en el momento — sin recargar — para no arrastrar los dos formatos
+ * a la vez.
+ */
+function readUrlState() {
+  if (location.search) {
+    const oldParams = new URLSearchParams(location.search);
+    const hashParams = new URLSearchParams(location.hash.slice(1));
+    ["class", "kid"].forEach((key) => {
+      const v = oldParams.get(key);
+      if (v && !hashParams.has(key)) hashParams.set(key, v);
+    });
+    const query = hashParams.toString();
+    history.replaceState(null, "", location.pathname + (query ? "#" + query : ""));
+  }
+  return new URLSearchParams(location.hash.slice(1));
+}
+
+/** Actualiza el "#" con los valores dados (cadena vacía = quitar esa clave). Sin recargar. */
+function setUrlParams(next) {
+  const params = new URLSearchParams(location.hash.slice(1));
+  Object.keys(next).forEach((key) => {
+    const value = next[key];
+    if (value) params.set(key, value);
+    else params.delete(key);
+  });
+  const query = params.toString();
+  history.replaceState(null, "", location.pathname + (query ? "#" + query : ""));
+}
+
+/** Refleja el curso y el niño/a actuales en la URL. */
+function syncUrlFromState() {
+  const course = state.courses.find((c) => c.id === state.courseId);
+  setUrlParams({
+    class: course ? course.alias || "" : "",
+    kid: state.myKid || ""
+  });
+}
+
 /* ---------- boot ---------- */
 
 async function switchCourse(id) {
@@ -660,6 +703,7 @@ async function switchCourse(id) {
   renderRestrictions();
   renderMonth();
   renderUpcomingEvents();
+  syncUrlFromState();
 }
 
 async function boot() {
@@ -675,7 +719,7 @@ async function boot() {
       courseSelect.append(opt);
     }
 
-    const params = new URLSearchParams(location.search);
+    const params = readUrlState();
     const classParam = params.get("class");
     const classCourse = classParam
       ? state.courses.find((c) => (c.alias || "").toLowerCase() === classParam.toLowerCase())
@@ -706,6 +750,7 @@ async function boot() {
       renderMine();
       renderMonth();
       renderUpcomingEvents();
+      syncUrlFromState();
     });
 
     document.getElementById("prev").addEventListener("click", () => {
@@ -743,6 +788,7 @@ async function boot() {
         renderMine();
         renderMonth();
         renderUpcomingEvents();
+        syncUrlFromState();
       }
     }
   } catch (err) {
