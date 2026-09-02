@@ -378,25 +378,30 @@ function renderUpcomingEvents() {
   ul.innerHTML = "";
 
   const todayISO = toISO(new Date());
-  const items = [];
-  for (const [iso, evs] of state.events) {
-    if (iso < todayISO) continue;
-    for (const ev of evs) items.push({ date: parseDate(iso), ev });
-  }
-  items.sort((a, b) =>
-    toISO(a.date).localeCompare(toISO(b.date)) ||
-    (a.ev.time || "").localeCompare(b.ev.time || ""));
+  const items = (state.cfg.events || [])
+    .map((ev) => {
+      const start = parseDate(ev.date || ev.from);
+      const end = parseDate(ev.date || ev.to || ev.from);
+      return { start, end, ev };
+    })
+    .filter(({ end }) => toISO(end) >= todayISO)
+    .sort((a, b) =>
+      toISO(a.start).localeCompare(toISO(b.start)) ||
+      (a.ev.time || "").localeCompare(b.ev.time || ""));
 
   if (!items.length) { box.hidden = true; return; }
 
-  for (const { date, ev } of items) {
+  for (const { start, end, ev } of items) {
     const li = document.createElement("li");
     li.className = "event";
 
     const header = document.createElement("p");
     header.className = "event-header";
-    const dow = DOW[((date.getDay() + 6) % 7) + 1];
-    header.textContent = `🗓️ ${dow} ${longDate(date)}` + (ev.time ? ` ${ev.time}` : "");
+    const dow = DOW[((start.getDay() + 6) % 7) + 1];
+    let headerText = `🗓️ ${dow} ${longDate(start)}`;
+    if (toISO(end) !== toISO(start)) headerText += ` al ${longDate(end)}`;
+    if (ev.time) headerText += ` ${ev.time}`;
+    header.textContent = headerText;
     li.append(header);
 
     const titleLine = document.createElement("p");
@@ -443,17 +448,30 @@ function renderAvisos() {
   ul.innerHTML = "";
   const items = [...state.avisos].sort((a, b) => b.date.localeCompare(a.date));
   if (!items.length) {
-    ul.innerHTML = `<li class="aviso"><p>Por ahora no hay avisos.</p></li>`;
+    ul.innerHTML = `<li class="notice"><p class="event-note">Por ahora no hay avisos.</p></li>`;
     return;
   }
   for (const a of items) {
     const li = document.createElement("li");
-    li.className = "aviso";
+    li.className = "notice";
+
     const d = parseDate(a.date);
-    li.innerHTML =
-      `<h3></h3><p></p><time datetime="${a.date}">${longDate(d)}</time>`;
-    li.querySelector("h3").textContent = a.title;
-    li.querySelector("p").textContent = a.body;
+    const dow = DOW[((d.getDay() + 6) % 7) + 1];
+    const header = document.createElement("p");
+    header.className = "event-header";
+    header.textContent = `🗓️ ${dow} ${longDate(d)}`;
+    li.append(header);
+
+    const titleLine = document.createElement("p");
+    titleLine.className = "event-title-line";
+    titleLine.textContent = a.title;
+    li.append(titleLine);
+
+    const bodyEl = document.createElement("p");
+    bodyEl.className = "event-note";
+    bodyEl.textContent = a.body;
+    li.append(bodyEl);
+
     ul.append(li);
   }
 }

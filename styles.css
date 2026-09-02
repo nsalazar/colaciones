@@ -439,7 +439,11 @@ h1 {
   color: var(--teal-deep);
 }
 
-.event p { margin: 0; }
+.event-header,
+.event-title-line,
+.event-note {
+  margin: 0;
+}
 
 .event-header {
   font-size: .72rem;
@@ -477,23 +481,21 @@ h1 {
   margin-bottom: .6rem;
 }
 
-.aviso h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0;
-}
-
 .aviso p {
-  margin: .25rem 0 0;
+  margin: 0;
   color: var(--ink-soft);
   font-size: .93rem;
 }
 
-.aviso time {
-  display: block;
-  margin-top: .5rem;
-  color: var(--ink-soft);
-  font-size: .78rem;
+/* Tarjetas de Avisos: misma estructura que Novedades (.event), en naranjo. */
+.notice {
+  margin: 0 0 .5rem;
+  padding: .5rem .65rem;
+  border-left: 3px solid var(--mandarin);
+  background: #FBE9DA;
+  border-radius: 0 8px 8px 0;
+  font-size: .87rem;
+  color: #8A3E06;
 }
 
 /* ---------- kid picker (mini, header) ---------- */

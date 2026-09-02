@@ -794,8 +794,17 @@ function tagsFor(contacts) {
 
 /* ---------- configuración de notificaciones ---------- */
 
+/**
+ * Sheets guarda las horas como fecha "cero" (30-dic-1899). Usar
+ * Utilities.formatDate() con una zona horaria nombrada reinterpreta esa
+ * fecha con la hora local histórica de Santiago (LMT, antes de que Chile
+ * estandarizara husos horarios) y desplaza la hora mostrada. getHours()/
+ * getMinutes() leen el valor tal como Sheets lo entendió, sin ese problema.
+ */
 function fmtTime(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, TZ, "HH:mm");
+  if (v instanceof Date) {
+    return String(v.getHours()).padStart(2, "0") + ":" + String(v.getMinutes()).padStart(2, "0");
+  }
   return String(v || "").trim();
 }
 
