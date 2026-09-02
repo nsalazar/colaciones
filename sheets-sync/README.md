@@ -115,10 +115,55 @@ Script** — el menú "Colación" ni siquiera aparece. Dos opciones:
      que los cambios lleguen a esa URL — a diferencia del sidebar, que
      siempre usa la última versión guardada.
 
+## Validación de datos
+
+Dos capas, para atrapar typos antes de que rompan algo en silencio:
+
+1. **Listas desplegables en el Sheet.** Menú **Colación → "Agregar
+   validaciones de datos (una vez)"** corre `applyDataValidation()`: agrega
+   dropdowns en los campos que el código compara por texto exacto —
+   "Niño/a" en Historial/Contactos/Restricciones (tomado en vivo desde
+   Rotacion, así que un niño nuevo aparece solo en la lista), "Día" en
+   Colaciones, "Tipo" en Cierres/Adjuntos, "DíaSemana" en Notificaciones, y
+   casillas de verdad para "Activo". Se puede correr de nuevo cuando
+   quieras — no borra datos. Los campos de nombre de niño avisan pero no
+   bloquean (hay excepciones legítimas, como un niño que ya no está en el
+   curso pero sigue en Historial); los demás si bloquean escribir un valor
+   fuera de la lista.
+2. **`validateData()`**, botón **🔍 Validar** del panel — revisa todo el
+   Sheet sin tocar GitHub y separa los problemas en dos grupos:
+   - **Errores**: romperían el sitio (fecha inválida, rango de fechas al
+     revés, un "Día" que no es un día de la semana, etc.). `publish()`
+     corre esta misma validación primero y **se niega a publicar** si hay
+     algún error — evita subir un JSON roto al repo público.
+   - **Avisos**: probables typos o datos de WhatsApp incompletos (un
+     nombre en Historial/Contactos/Restricciones/Audiencia que no coincide
+     con ningún niño de Rotacion, un teléfono que no tiene pinta de celular
+     chileno, un niño sin ningún teléfono cargado, un `DíaSemana` que no
+     existe). No bloquean publicar, porque no rompen el sitio — solo un
+     recordatorio de WhatsApp que capaz nadie note que falta.
+
+## Avisos por correo si algo falla solo
+
+`checkReminders()` (el trigger de 15 min) manda un correo — `MailApp`, sin
+servicios externos — si el recordatorio diario o el semanal fallan (token de
+GitHub vencido no aplica acá, pero sí un webhook de HA caído, una pestaña
+mal armada, etc.). Cada recordatorio se prueba en su propio try/catch: si
+falla el diario igual se intenta el semanal, y ninguno de los dos se marca
+como "ya enviado" cuando falla, así que se reintenta solo en el próximo
+chequeo de 15 minutos.
+
+Por defecto manda el correo al dueño del script. Para usar otro correo,
+agrega la Script Property `ALERT_EMAIL` con la dirección que prefieras.
+
 ## Botones del panel lateral
 
-- **Publicar a GitHub** — corre `publish()`: arma los dos JSON desde las
-  pestañas y hace commit al repo vía la API de contenidos de GitHub.
+- **🔍 Validar** — corre `validateData()` y muestra errores/avisos sin
+  tocar GitHub. Pensado para revisar antes de publicar, sin el riesgo de
+  publicar por accidente.
+- **Publicar a GitHub** — corre `publish()`: valida primero (ver arriba),
+  y si no hay errores arma los dos JSON desde las pestañas y hace commit al
+  repo vía la API de contenidos de GitHub.
 - **↩️ Deshacer cambios (volver a lo publicado)** — corre
   `revertFromGithub()`: trae el `schedule.json`/`announcements.json` que hay
   ahora mismo en GitHub y sobreescribe las pestañas publicables con eso,

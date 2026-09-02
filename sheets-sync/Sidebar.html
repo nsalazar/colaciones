@@ -7,6 +7,7 @@
   button:disabled { background: #ccc; cursor: not-allowed; }
   button.ghost { background: #fff; color: #1C8E79; border: 1px solid #1C8E79; }
   button.danger { background: #fff; color: #B3261E; border: 1px solid #B3261E; }
+  button.secondary { background: #fff; color: #444; border: 1px solid #ccc; }
   #msg { margin-top: 4px; margin-bottom: 16px; font-size: 12px; color: #666; white-space: pre-wrap; }
   h3 { font-size: 13px; margin: 18px 0 8px; border-top: 1px solid #ddd; padding-top: 14px; }
   input[type="date"] { width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
@@ -14,6 +15,10 @@
 </style>
 
 <div id="status">Cargando…</div>
+
+<button id="btnValidate" class="secondary">🔍 Validar</button>
+<div id="msgValidate" class="testmsg" style="display:none"></div>
+
 <button id="btn" disabled>Publicar a GitHub</button>
 <div id="msg"></div>
 
@@ -89,6 +94,38 @@
         button.disabled = false;
       })[fn].apply(null, args);
   }
+
+  document.getElementById('btnValidate').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    var box = document.getElementById('msgValidate');
+    box.style.display = 'block';
+    box.textContent = 'Revisando…';
+    google.script.run
+      .withSuccessHandler(function (r) {
+        var lines = [];
+        if (!r.errors.length && !r.warnings.length) {
+          lines.push('✅ Todo OK, no se encontraron problemas.');
+        } else {
+          if (r.errors.length) {
+            lines.push('❌ Errores (bloquean "Publicar a GitHub"):');
+            r.errors.forEach(function (e) { lines.push('  • ' + e); });
+          }
+          if (r.warnings.length) {
+            if (r.errors.length) lines.push('');
+            lines.push('⚠️ Avisos (no bloquean, pero conviene revisar):');
+            r.warnings.forEach(function (w) { lines.push('  • ' + w); });
+          }
+        }
+        box.textContent = lines.join('\n');
+        btn.disabled = false;
+      })
+      .withFailureHandler(function (err) {
+        box.textContent = '❌ Error al validar: ' + err.message;
+        btn.disabled = false;
+      })
+      .validateData();
+  });
 
   document.getElementById('btnRevert').addEventListener('click', function () {
     var ok = confirm(

@@ -27,6 +27,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("Colación")
     .addItem("Mostrar panel de publicación", "showSidebar")
+    .addItem("Agregar validaciones de datos (una vez)", "applyDataValidation")
     .addToUi();
 }
 
@@ -243,7 +244,161 @@ function putFile(path, jsonObj, message) {
   }
 }
 
+/**
+ * Revisa los datos del Sheet sin tocar GitHub. `errors` son problemas que
+ * romperían el sitio o la rotación (publish() se detiene si hay alguno);
+ * `warnings` son probables typos o datos de WhatsApp incompletos que no
+ * rompen el sitio pero sí los recordatorios — no bloquean la publicación.
+ */
+function validateData() {
+  const errors = [];
+  const warnings = [];
+
+  const cfg = readConfigMap();
+  if (!cfg["Curso"]) errors.push("Config: falta \"Curso\".");
+
+  const rotationStartRaw = cfg["Inicio de rotación (rotationStart)"];
+  if (!rotationStartRaw) {
+    errors.push("Config: falta \"Inicio de rotación (rotationStart)\".");
+  } else if (isNaN(parseDateLocal(fmtDate(rotationStartRaw)).getTime())) {
+    errors.push("Config: \"Inicio de rotación\" no es una fecha válida: " + rotationStartRaw);
+  }
+
+  const groupId = String(cfg["ID de Grupo WhatsApp"] || "").trim();
+  if (groupId.indexOf("@") !== -1) {
+    warnings.push("Config: \"ID de Grupo WhatsApp\" no debería incluir \"@...\" — el script agrega \"@g.us\" solo.");
+  }
+
+  function checkDate(raw, label) {
+    if (!raw) return null;
+    const d = parseDateLocal(fmtDate(raw));
+    if (isNaN(d.getTime())) { errors.push(label + ": fecha inválida \"" + raw + "\"."); return null; }
+    return d;
+  }
+
+  function checkRange(r, label) {
+    const from = checkDate(r["Fecha inicio"], label);
+    if (r["Fecha fin"]) {
+      const to = checkDate(r["Fecha fin"], label);
+      if (from && to && to < from) errors.push(label + ": \"Fecha fin\" es anterior a \"Fecha inicio\".");
+    }
+  }
+
+  const dowMap = { "Lunes": "1", "Martes": "2", "Miércoles": "3", "Jueves": "4", "Viernes": "5" };
+  readTable("Colaciones").forEach(function (r, i) {
+    const dia = String(r["Día"] || "").trim();
+    if (!dowMap[dia]) {
+      errors.push("Colaciones fila " + (i + 4) + ": \"" + dia + "\" no es un día válido (Lunes..Viernes) — ese día queda sin colación definida.");
+    }
+  });
+
+  const kids = readTable("Rotacion").map(function (r) { return r["Niño/a"]; }).filter(String);
+  if (!kids.length) errors.push("Rotacion: no hay ningún niño cargado.");
+  const kidsSet = {};
+  kids.forEach(function (k) { kidsSet[k] = true; });
+  const seenKids = {};
+  kids.forEach(function (k) {
+    if (seenKids[k]) warnings.push("Rotacion: \"" + k + "\" está repetido — puede desequilibrar la rotación.");
+    seenKids[k] = true;
+  });
+
+  readTable("Cierres").forEach(function (r, i) {
+    const label = "Cierres fila " + (i + 4);
+    if (!r["Fecha inicio"]) { errors.push(label + ": falta \"Fecha inicio\"."); return; }
+    checkRange(r, label);
+    const tipo = String(r["Tipo"] || "").trim();
+    if (tipo && tipo !== "sinColacion" && tipo !== "sinClases") {
+      warnings.push(label + ": \"Tipo\" = \"" + tipo + "\" no se reconoce, se va a tratar como \"sinClases\".");
+    }
+  });
+
+  readTable("Historial").forEach(function (r, i) {
+    const label = "Historial fila " + (i + 4);
+    if (!r["Fecha"]) errors.push(label + ": falta \"Fecha\".");
+    else checkDate(r["Fecha"], label);
+    const kid = r["Niño/a"];
+    if (kid && !kidsSet[kid]) warnings.push(label + ": \"" + kid + "\" no está en Rotacion — revisa que no sea un typo.");
+  });
+
+  readTable("Eventos").forEach(function (r, i) {
+    const label = "Eventos fila " + (i + 4);
+    if (!r["Fecha inicio"]) { errors.push(label + ": falta \"Fecha inicio\"."); return; }
+    checkRange(r, label);
+    if (!r["Título"]) warnings.push(label + ": no tiene \"Título\".");
+    const aud = String(r["Audiencia"] || "Todos").trim();
+    if (aud.toLowerCase() !== "todos") {
+      aud.split(",").map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (name) {
+        if (!kidsSet[name]) warnings.push(label + ": \"" + name + "\" en Audiencia no está en Rotacion — revisa que no sea un typo.");
+      });
+    }
+  });
+
+  readTable("Adjuntos").forEach(function (r, i) {
+    const label = "Adjuntos fila " + (i + 4);
+    if (!r["Fecha"]) errors.push(label + ": falta \"Fecha\".");
+    else checkDate(r["Fecha"], label);
+    if (!r["Valor"]) errors.push(label + ": falta \"Valor\" (el archivo o el enlace).");
+    const tipo = String(r["Tipo"] || "").trim();
+    if (tipo && tipo !== "Enlace" && tipo !== "Archivo") {
+      warnings.push(label + ": \"Tipo\" = \"" + tipo + "\" no se reconoce, se va a tratar como \"Archivo\".");
+    }
+  });
+
+  readTable("Restricciones").forEach(function (r, i) {
+    const kid = r["Niño/a"];
+    if (kid && !kidsSet[kid]) {
+      warnings.push("Restricciones fila " + (i + 4) + ": \"" + kid + "\" no está en Rotacion — revisa que no sea un typo.");
+    }
+  });
+
+  readTable("Avisos").forEach(function (r, i) {
+    const label = "Avisos fila " + (i + 4);
+    if (!r["Fecha"]) errors.push(label + ": falta \"Fecha\".");
+    else checkDate(r["Fecha"], label);
+    if (!r["Título"]) warnings.push(label + ": no tiene \"Título\".");
+  });
+
+  // Contactos y Notificaciones nunca se publican, pero sí afectan WhatsApp.
+  const contactedKids = {};
+  readTable("Contactos").forEach(function (r) {
+    const kid = r["Niño/a"];
+    if (!kid) return;
+    if (!kidsSet[kid]) warnings.push("Contactos: \"" + kid + "\" no está en Rotacion — revisa que no sea un typo.");
+    [["Teléfono 1", r["Teléfono 1"]], ["Teléfono 2", r["Teléfono 2"]]].forEach(function (pair) {
+      const campo = pair[0], val = pair[1];
+      if (!val) return;
+      contactedKids[kid] = true;
+      if (!/^56\d{9}$/.test(normalizePhone(val))) {
+        warnings.push("Contactos (" + kid + "): \"" + campo + "\" = \"" + val + "\" no parece un celular chileno válido (formato esperado: 56 + 9 dígitos, ej. 56912345678).");
+      }
+    });
+  });
+  kids.forEach(function (kid) {
+    if (!contactedKids[kid]) {
+      warnings.push("\"" + kid + "\" no tiene teléfono cargado en Contactos — no le va a llegar el recordatorio diario a nadie ese día.");
+    }
+  });
+
+  readTable("Notificaciones").forEach(function (r) {
+    const tipo = r["Recordatorio"];
+    const diaSemana = String(r["DíaSemana"] || "").trim();
+    if (tipo === "Semanal" && diaSemana && DOW_ES.indexOf(diaSemana) === -1) {
+      warnings.push("Notificaciones (Semanal): \"DíaSemana\" = \"" + diaSemana + "\" no es un día válido — el recordatorio nunca se va a disparar solo.");
+    }
+    if (r["Hora"] && !/^\d{2}:\d{2}$/.test(fmtTime(r["Hora"]))) {
+      warnings.push("Notificaciones (" + tipo + "): \"Hora\" = \"" + r["Hora"] + "\" no tiene formato HH:mm.");
+    }
+  });
+
+  return { errors: errors, warnings: warnings };
+}
+
 function publish() {
+  const validation = validateData();
+  if (validation.errors.length) {
+    throw new Error("No se publicó por estos problemas:\n- " + validation.errors.join("\n- "));
+  }
+
   const schedule = buildSchedule();
   const announcements = buildAnnouncements();
 
@@ -403,6 +558,81 @@ function setupContactsAndNotificationsTabs() {
     "agrega el \"ID de Grupo WhatsApp\" si quieres que el resumen semanal se envíe al grupo del curso " +
     "(vacío = no se envía)."
   );
+}
+
+/**
+ * Agrega listas desplegables (validación de datos nativa de Sheets) en las
+ * columnas que el código compara por texto exacto, para que un typo se note
+ * al tipear en vez de romper algo en silencio. Se puede correr de nuevo
+ * cuando quieras — no borra datos, solo aplica las reglas. Menú Colación >
+ * "Agregar validaciones de datos".
+ */
+function applyDataValidation() {
+  const rotacionSheet = SpreadsheetApp.getActive().getSheetByName("Rotacion");
+  if (!rotacionSheet) throw new Error("No existe la pestaña Rotacion.");
+
+  // Rango amplio y en vivo: si agregas niños nuevos en Rotacion, aparecen
+  // solos en estas listas sin tener que volver a correr esta función.
+  const kidsRange = rotacionSheet.getRange("A4:A500");
+  const kidRule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(kidsRange, true)
+    .setAllowInvalid(true) // avisa, no bloquea: hay excepciones legítimas (niños que ya no están en el curso, en Historial)
+    .setHelpText("Debería ser uno de los niños de Rotacion. Si no lo es, revisa que no sea un typo.")
+    .build();
+  applyValidationToColumn("Historial", "Niño/a", kidRule);
+  applyValidationToColumn("Contactos", "Niño/a", kidRule);
+  applyValidationToColumn("Restricciones", "Niño/a", kidRule);
+
+  const diaRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"], true)
+    .setAllowInvalid(false)
+    .build();
+  applyValidationToColumn("Colaciones", "Día", diaRule);
+
+  const cierreTipoRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(["", "sinClases", "sinColacion"], true)
+    .setAllowInvalid(false)
+    .build();
+  applyValidationToColumn("Cierres", "Tipo", cierreTipoRule);
+
+  const adjuntoTipoRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(["Archivo", "Enlace"], true)
+    .setAllowInvalid(false)
+    .build();
+  applyValidationToColumn("Adjuntos", "Tipo", adjuntoTipoRule);
+
+  const diaSemanaRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"], true)
+    .setAllowInvalid(false)
+    .build();
+  applyValidationToColumn("Notificaciones", "DíaSemana", diaSemanaRule);
+
+  applyCheckboxToColumn("Notificaciones", "Activo");
+
+  SpreadsheetApp.getUi().alert(
+    "Listo. Se agregaron listas desplegables en los campos que suelen romperse con un typo " +
+    "(nombres de niños, Día, Tipo, DíaSemana). No se modificó ningún dato existente."
+  );
+}
+
+/** Aplica una regla de validación a una columna (por nombre de encabezado), filas 4 a 500. */
+function applyValidationToColumn(sheetName, headerName, rule) {
+  const sh = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  if (!sh) return;
+  const headers = sh.getRange(3, 1, 1, sh.getLastColumn()).getValues()[0];
+  const col = headers.indexOf(headerName) + 1;
+  if (col < 1) return;
+  sh.getRange(4, col, 497, 1).setDataValidation(rule);
+}
+
+/** Convierte una columna en casillas de verificación (TRUE/FALSE reales). */
+function applyCheckboxToColumn(sheetName, headerName) {
+  const sh = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  if (!sh) return;
+  const headers = sh.getRange(3, 1, 1, sh.getLastColumn()).getValues()[0];
+  const col = headers.indexOf(headerName) + 1;
+  if (col < 1) return;
+  sh.getRange(4, col, 497, 1).insertCheckboxes();
 }
 
 /** Aplica el mismo estilo (encabezado teal, leyenda en cursiva, fuente) que ya tienen las demás pestañas. */
@@ -737,22 +967,58 @@ function testDaily(dateStr) {
 }
 
 /**
+ * Avisa por correo cuando algo falla en un proceso automático — sin esto,
+ * un token vencido o el webhook de HA caído fallan en silencio y nadie se
+ * entera hasta que un apoderado reclama que no le llegó el recordatorio.
+ * Usa la Script Property ALERT_EMAIL si existe; si no, el correo del dueño
+ * del script.
+ */
+function notifyOwnerOfError(context, err) {
+  try {
+    const email = PropertiesService.getScriptProperties().getProperty("ALERT_EMAIL") || Session.getEffectiveUser().getEmail();
+    if (!email) return;
+    MailApp.sendEmail({
+      to: email,
+      subject: "⚠️ Colación — error en " + context,
+      body: "Ocurrió un error en " + context + ":\n\n" +
+        (err && err.stack ? err.stack : String(err)) +
+        "\n\nRevisa Apps Script > Ejecuciones para más detalle."
+    });
+  } catch (mailErr) {
+    console.error("No se pudo enviar el correo de aviso: " + mailErr);
+  }
+}
+
+/**
  * Trigger instalable (cada 15 min) que revisa si corresponde disparar
  * alguno de los dos recordatorios, según lo configurado en "Notificaciones".
+ * Cada recordatorio se aísla en su propio try/catch: si uno falla, el otro
+ * igual se intenta, y no se marca como enviado para reintentar en 15 min.
  */
 function checkReminders() {
+  let notif;
+  try {
+    notif = readNotifConfig();
+  } catch (err) {
+    notifyOwnerOfError("checkReminders (leer Notificaciones)", err);
+    return;
+  }
+
   const now = new Date();
   const hhmm = Utilities.formatDate(now, TZ, "HH:mm");
   const today = Utilities.formatDate(now, TZ, "yyyy-MM-dd");
   const props = PropertiesService.getScriptProperties();
-  const notif = readNotifConfig();
 
   const diario = notif["Diario"];
   if (diario && diario.activo && diario.hora === hhmm) {
     const key = "sent_diario_" + today;
     if (!props.getProperty(key)) {
-      runDailyReminder(diario);
-      props.setProperty(key, "1");
+      try {
+        runDailyReminder(diario);
+        props.setProperty(key, "1");
+      } catch (err) {
+        notifyOwnerOfError("recordatorio diario", err);
+      }
     }
   }
 
@@ -760,8 +1026,12 @@ function checkReminders() {
   if (semanal && semanal.activo && semanal.hora === hhmm && DOW_ES[now.getDay()] === semanal.diaSemana) {
     const key = "sent_semanal_" + today;
     if (!props.getProperty(key)) {
-      runWeeklyReminder(semanal);
-      props.setProperty(key, "1");
+      try {
+        runWeeklyReminder(semanal);
+        props.setProperty(key, "1");
+      } catch (err) {
+        notifyOwnerOfError("recordatorio semanal", err);
+      }
     }
   }
 }
