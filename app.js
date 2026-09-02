@@ -115,12 +115,6 @@ function expandAttachments(list) {
   return map;
 }
 
-function involves(ev, kid) {
-  if (!kid) return false;
-  if (ev.audience === "todos" || !ev.audience) return true;
-  return Array.isArray(ev.audience) && ev.audience.includes(kid);
-}
-
 function buildIndex(cfg, closures) {
   const map = new Map();
 
@@ -398,18 +392,30 @@ function renderUpcomingEvents() {
   for (const { date, ev } of items) {
     const li = document.createElement("li");
     li.className = "event";
-    if (involves(ev, state.myKid)) li.classList.add("event-mine");
-    const who = Array.isArray(ev.audience) ? "algunos apoderados" : "Todo el curso";
-    const bits = [`${DOW[((date.getDay() + 6) % 7) + 1]} ${longDate(date)}`, ev.title];
-    if (ev.time) bits.push(ev.time);
-    bits.push(who);
-    li.textContent = bits.join(" · ");
-    if (ev.place || ev.note) {
-      const extra = document.createElement("span");
-      extra.className = "event-note";
-      extra.textContent = ev.place || ev.note;
-      li.append(document.createElement("br"), extra);
+
+    const header = document.createElement("p");
+    header.className = "event-header";
+    const dow = DOW[((date.getDay() + 6) % 7) + 1];
+    header.textContent = `🗓️ ${dow} ${longDate(date)}` + (ev.time ? ` ${ev.time}` : "");
+    li.append(header);
+
+    const titleLine = document.createElement("p");
+    titleLine.className = "event-title-line";
+    let titleText = ev.title;
+    if (ev.audience && ev.audience !== "todos") {
+      titleText += " " + (Array.isArray(ev.audience) ? ev.audience.join(", ") : ev.audience);
     }
+    titleLine.textContent = titleText;
+    li.append(titleLine);
+
+    const noteText = ev.place || ev.note;
+    if (noteText) {
+      const noteEl = document.createElement("p");
+      noteEl.className = "event-note";
+      noteEl.textContent = noteText;
+      li.append(noteEl);
+    }
+
     ul.append(li);
   }
   box.hidden = false;
@@ -573,7 +579,6 @@ function buildShareSnapshot(anchor) {
   if (!events.hidden) {
     const eventsClone = events.cloneNode(true);
     eventsClone.hidden = false;
-    eventsClone.querySelectorAll(".event-mine").forEach((li) => li.classList.remove("event-mine"));
     wrap.append(eventsClone);
   }
 

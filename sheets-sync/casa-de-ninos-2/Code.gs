@@ -165,7 +165,7 @@ function buildSchedule() {
     const from = fmtDate(r["Fecha inicio"]);
     const to = fmtDate(r["Fecha fin"]);
     if (to) { entry.from = from; entry.to = to; } else { entry.date = from; }
-    if (r["Hora"]) entry.time = String(r["Hora"]);
+    if (r["Hora"]) entry.time = fmtTime(r["Hora"]);
     entry.title = r["Título"] || "";
     const aud = String(r["Audiencia"] || "Todos").trim();
     entry.audience = aud.toLowerCase() === "todos"

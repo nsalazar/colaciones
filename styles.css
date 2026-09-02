@@ -439,17 +439,25 @@ h1 {
   color: var(--teal-deep);
 }
 
-.event-mine {
-  border-left-color: var(--mandarin);
-  background: #FBE9DA;
-  color: #8A3E06;
-  font-weight: 500;
+.event p { margin: 0; }
+
+.event-header {
+  font-size: .72rem;
+  opacity: .85;
+}
+
+.event-title-line {
+  margin-top: .15rem;
+  font-weight: 700;
 }
 
 .event-note {
+  display: block;
+  margin-top: .3rem;
   color: inherit;
   opacity: .8;
   font-size: .82rem;
+  white-space: pre-line;
 }
 
 /* ---------- avisos ---------- */
