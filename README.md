@@ -109,14 +109,46 @@ curso nuevo es agregar una entrada aquí + crear su carpeta en `data/` (ver
   siguiente día hábil. `"type": "sinColacion"` es día con clases pero sin
   colación (ej. hay catering) — también corre el turno.
 - **`events`**: independiente de la rotación. `audience` es `"todos"` o una
-  lista de nombres.
+  lista de nombres. En el sitio, un evento con `from`/`to` aparece **una
+  sola vez** en "Próximos eventos" (no repetido por cada día), con la fecha
+  como "Miércoles 9 de septiembre al 10 de septiembre".
 - **`attachments`**: `file` (ruta dentro del repo, bajo `attachments/`) o
   `link` (URL externa).
 - **`restrictions`**: `{ restriction, kid }`, `kid` vacío = aplica a todos.
 
 ### `data/<curso>/announcements.json`
 
-Lista de `{ date, title, body }`, más nuevo primero.
+Lista de `{ date, title, body }`. `date` es la fecha **para la que aplica**
+el aviso (igual que en `events`), no la fecha en que se escribió: el sitio
+oculta los avisos ya pasados y esconde la sección entera si no queda
+ninguno vigente.
+
+### Íconos en el calendario
+
+Cada día con algo especial muestra un ícono pequeño (con tooltip al pasar el
+mouse):
+
+| Ícono | Significa |
+|---|---|
+| 📅 (naranjo) | Hay un evento ese día (`events`). |
+| 📣 (gris oscuro) | Hay un aviso vigente para ese día (`announcements.json`). |
+| 📎 (verde) | Hay un adjunto ese día (`attachments`), clickeable. |
+
+## Links directos y compartir
+
+La URL refleja el curso y el niño/a elegidos, ej.
+`https://nsalazar.github.io/colaciones/#class=CN2&kid=Diego` — cambiar los
+selectores actualiza la URL sola (sin recargar), así que copiar la barra de
+direcciones en cualquier momento comparte exactamente esa vista. Links
+viejos con `?class=&kid=` (formato usado antes) se migran solos al abrir,
+sin recargar la página.
+
+El botón **Compartir imagen** genera una foto (PNG) del mes que se está
+viendo — calendario + Próximos eventos + Avisos (si no está vacío) — sin el
+resaltado de "hoy" ni el del niño/a seleccionado, para que sirva como una
+imagen neutral para el grupo de WhatsApp. Usa `html2canvas` (cargado desde
+un CDN solo al hacer clic en el botón) y el Web Share API cuando el
+navegador lo soporta; si no, descarga el PNG.
 
 ## Recordatorios por WhatsApp
 

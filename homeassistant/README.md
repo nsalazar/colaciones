@@ -93,6 +93,19 @@ Por eso el mensaje semanal usa negrita en el día/niño en vez de tags, y el
 mensaje diario, si quiere mostrar el nombre del apoderado, lo hace como
 texto plano (`{tags}` en la plantilla del Sheet).
 
+## Pendiente: mandar la imagen del calendario
+
+El addon expone `whatsapp.send_image` (`account, target, url, caption, ...`)
+— manda una imagen desde una **URL pública HTTPS** con texto como pie de
+foto. Todavía no se usa: el sitio ya sabe generar una imagen del mes
+("Compartir imagen", ver [README.md](../README.md#links-directos-y-compartir))
+pero corre en el navegador de quien lo aprieta (`html2canvas`), no sirve
+para el envío automático semanal que corre en Apps Script sin navegador. Para
+automatizarlo habría que generar la imagen del lado del servidor (ej. Google
+Slides vía Apps Script, exportado como PNG y subido al repo para tener una
+URL pública) y recién ahí llamar a `send_image` con esa URL + el texto del
+resumen semanal como `caption`.
+
 ## Seguridad
 
 - La URL del webhook (`HA_WEBHOOK_URL`) es un secreto: vive solo en las

@@ -69,10 +69,21 @@ Estas pestañas **sí se publican** a GitHub (`publish()` las lee):
 | Colaciones | `Día` \| `Colación` | `weekdays{}`. |
 | Cierres | `Fecha inicio` \| `Fecha fin` \| `Motivo` \| `Tipo` | `closures[]`. `Fecha fin` vacía = un solo día. `Tipo` = `sinColacion` o cualquier otra cosa/vacío = `sinClases`. |
 | Historial | `Fecha` \| `Niño/a` | `history[]`. |
-| Eventos | `Fecha inicio` \| `Fecha fin` \| `Hora` \| `Título` \| `Audiencia` \| `Nota` \| `Lugar` | `events[]`. `Audiencia` = `Todos` o nombres separados por coma. |
+| Eventos | `Fecha inicio` \| `Fecha fin` \| `Hora` \| `Título` \| `Audiencia` \| `Nota` \| `Lugar` | `events[]`. `Audiencia` = `Todos` o nombres separados por coma. `Fecha fin` vacía = un solo día; con rango, el sitio lo muestra una sola vez ("del... al..."), no repetido por cada día. |
 | Adjuntos | `Fecha` \| `Tipo` \| `Valor` \| `Etiqueta` | `attachments[]`. `Tipo` = `Enlace` (URL en `Valor`) o cualquier otra cosa (archivo, en `Valor`). |
 | Restricciones | `Restricción` \| `Niño/a` | `restrictions[]`. `Niño/a` vacío = aplica a todos. |
-| Avisos | `Fecha` \| `Título` \| `Cuerpo` | `announcements.json`. |
+| Avisos | `Fecha` \| `Título` \| `Cuerpo` | `announcements.json`. `Fecha` es para cuándo **aplica** el aviso (no cuándo se escribió) — el sitio oculta los avisos ya pasados. |
+
+**Sobre `Hora` (Eventos y Notificaciones):** Sheets guarda las horas como
+fecha "cero" (30-dic-1899). Cualquier lectura que pase por un objeto `Date`
+—`String()`, `getHours()`, `Utilities.formatDate()` con zona horaria— puede
+reinterpretar esa fecha con la hora local histórica de Santiago (LMT, antes
+de que Chile estandarizara husos horarios) y mostrar una hora distinta a la
+que se escribió. Por eso `Code.gs` lee el **texto tal como Sheets lo
+muestra en la celda** (`getDisplayValues()`, funciones `readDisplayColumn()`
+/ `parseDisplayTime()`) en vez de convertir a `Date` en algún punto. Si en
+el futuro alguien "simplifica" esto usando `Utilities.formatDate()`, el bug
+vuelve.
 
 Estas dos **nunca se publican** (no las toca `buildSchedule()` ni
 `buildAnnouncements()` — los teléfonos jamás salen del Sheet):
