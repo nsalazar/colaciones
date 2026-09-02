@@ -13,6 +13,7 @@ const state = {
   courseId: null,
   cfg: null,
   avisos: [],
+  avisosByDate: new Map(),
   index: new Map(),
   closures: new Map(),
   events: new Map(),
@@ -107,6 +108,15 @@ function expandEvents(list) {
 }
 
 function expandAttachments(list) {
+  const map = new Map();
+  for (const a of list || []) {
+    if (!map.has(a.date)) map.set(a.date, []);
+    map.get(a.date).push(a);
+  }
+  return map;
+}
+
+function expandAvisos(list) {
   const map = new Map();
   for (const a of list || []) {
     if (!map.has(a.date)) map.set(a.date, []);
@@ -246,6 +256,7 @@ function dayCellContent(d, inMonth, opts = {}) {
   const closure = state.closures.get(iso);
   const dayEvents = state.events.get(iso) || [];
   const dayAttachments = state.attachments.get(iso) || [];
+  const dayAvisos = state.avisosByDate.get(iso) || [];
 
   td.className = "cell";
   if (isWeekend) td.classList.add("weekend");
@@ -300,6 +311,25 @@ function dayCellContent(d, inMonth, opts = {}) {
       const bits = ["Evento: " + ev.title];
       if (ev.time) bits.push(ev.time);
       tooltip.append(document.createTextNode(bits.join(" · ")));
+    });
+    marker.append(tooltip);
+    icons.push(marker);
+  }
+
+  if (dayAvisos.length) {
+    const marker = document.createElement("span");
+    marker.className = "notice-marker";
+    marker.tabIndex = 0;
+    marker.append(svgIcon(
+      '<path d="m3 11 18-5v12L3 14v-3z"></path>' +
+      '<path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"></path>'
+    ));
+
+    const tooltip = document.createElement("span");
+    tooltip.className = "event-tooltip";
+    dayAvisos.forEach((av, i) => {
+      if (i > 0) tooltip.append(document.createElement("br"));
+      tooltip.append(document.createTextNode("Aviso: " + av.title));
     });
     marker.append(tooltip);
     icons.push(marker);
@@ -444,13 +474,17 @@ function renderMine() {
 }
 
 function renderAvisos() {
+  const box = document.getElementById("avisosSection");
   const ul = document.getElementById("avisos");
   ul.innerHTML = "";
-  const items = [...state.avisos].sort((a, b) => b.date.localeCompare(a.date));
-  if (!items.length) {
-    ul.innerHTML = `<li class="notice"><p class="event-note">Por ahora no hay avisos.</p></li>`;
-    return;
-  }
+
+  const todayISO = toISO(new Date());
+  const items = state.avisos
+    .filter((a) => a.date >= todayISO)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (!items.length) { box.hidden = true; return; }
+
   for (const a of items) {
     const li = document.createElement("li");
     li.className = "notice";
@@ -474,6 +508,7 @@ function renderAvisos() {
 
     ul.append(li);
   }
+  box.hidden = false;
 }
 
 function renderRestrictions() {
@@ -600,6 +635,13 @@ function buildShareSnapshot(anchor) {
     wrap.append(eventsClone);
   }
 
+  const avisos = document.getElementById("avisosSection");
+  if (!avisos.hidden) {
+    const avisosClone = avisos.cloneNode(true);
+    avisosClone.hidden = false;
+    wrap.append(avisosClone);
+  }
+
   document.body.append(wrap);
   return wrap;
 }
@@ -713,6 +755,7 @@ async function switchCourse(id) {
 
   state.cfg = cfg;
   state.avisos = avisos;
+  state.avisosByDate = expandAvisos(avisos);
   state.closures = expandClosures(cfg.closures);
   state.events = expandEvents(cfg.events);
   state.attachments = expandAttachments(cfg.attachments);

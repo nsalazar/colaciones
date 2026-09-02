@@ -305,6 +305,7 @@ h1 {
 }
 
 .event-marker,
+.notice-marker,
 .attachment-marker {
   position: relative;
   display: inline-flex;
@@ -320,6 +321,7 @@ h1 {
   color: var(--mandarin);
 }
 
+.notice-marker .cell-icon { color: var(--ink); }
 .attachment-marker .cell-icon { color: var(--teal); }
 
 .cell.today .cell-icon,
@@ -350,6 +352,8 @@ h1 {
 
 .event-marker:hover .event-tooltip,
 .event-marker:focus-visible .event-tooltip,
+.notice-marker:hover .event-tooltip,
+.notice-marker:focus-visible .event-tooltip,
 .attachment-marker:hover .event-tooltip,
 .attachment-marker:focus-visible .event-tooltip,
 .legend-info:hover .event-tooltip,

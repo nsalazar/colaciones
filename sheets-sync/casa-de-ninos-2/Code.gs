@@ -160,12 +160,13 @@ function buildSchedule() {
     return { date: fmtDate(r["Fecha"]), kid: r["Niño/a"] };
   });
 
-  const events = readTable("Eventos").map(function (r) {
+  const eventosHora = readDisplayColumn("Eventos", "Hora");
+  const events = readTable("Eventos").map(function (r, i) {
     const entry = {};
     const from = fmtDate(r["Fecha inicio"]);
     const to = fmtDate(r["Fecha fin"]);
     if (to) { entry.from = from; entry.to = to; } else { entry.date = from; }
-    if (r["Hora"]) entry.time = fmtTime(r["Hora"]);
+    if (r["Hora"]) entry.time = parseDisplayTime(eventosHora[i]);
     entry.title = r["Título"] || "";
     const aud = String(r["Audiencia"] || "Todos").trim();
     entry.audience = aud.toLowerCase() === "todos"
@@ -379,13 +380,14 @@ function validateData() {
     }
   });
 
-  readTable("Notificaciones").forEach(function (r) {
+  const notifHoraDisplay = readDisplayColumn("Notificaciones", "Hora");
+  readTable("Notificaciones").forEach(function (r, i) {
     const tipo = r["Recordatorio"];
     const diaSemana = String(r["DíaSemana"] || "").trim();
     if (tipo === "Semanal" && diaSemana && DOW_ES.indexOf(diaSemana) === -1) {
       warnings.push("Notificaciones (Semanal): \"DíaSemana\" = \"" + diaSemana + "\" no es un día válido — el recordatorio nunca se va a disparar solo.");
     }
-    if (r["Hora"] && !/^\d{2}:\d{2}$/.test(fmtTime(r["Hora"]))) {
+    if (r["Hora"] && !/^\d{2}:\d{2}$/.test(parseDisplayTime(notifHoraDisplay[i]))) {
       warnings.push("Notificaciones (" + tipo + "): \"Hora\" = \"" + r["Hora"] + "\" no tiene formato HH:mm.");
     }
   });
@@ -795,27 +797,50 @@ function tagsFor(contacts) {
 /* ---------- configuración de notificaciones ---------- */
 
 /**
- * Sheets guarda las horas como fecha "cero" (30-dic-1899). Usar
- * Utilities.formatDate() con una zona horaria nombrada reinterpreta esa
- * fecha con la hora local histórica de Santiago (LMT, antes de que Chile
- * estandarizara husos horarios) y desplaza la hora mostrada. getHours()/
- * getMinutes() leen el valor tal como Sheets lo entendió, sin ese problema.
+ * Sheets guarda las horas como fecha "cero" (30-dic-1899). Cualquier
+ * conversión vía objeto Date (String(), getHours(), Utilities.formatDate())
+ * puede reinterpretar esa fecha con la hora local histórica de Santiago
+ * (LMT, antes de que Chile estandarizara husos horarios) y desplazar la
+ * hora varias horas. Para evitarlo del todo, se lee el TEXTO tal como
+ * Sheets lo muestra en la celda (getDisplayValues()) — sin pasar por Date.
  */
-function fmtTime(v) {
-  if (v instanceof Date) {
-    return String(v.getHours()).padStart(2, "0") + ":" + String(v.getMinutes()).padStart(2, "0");
+function readDisplayColumn(sheetName, headerName) {
+  const sheet = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  if (!sheet) return [];
+  const values = sheet.getDataRange().getValues();
+  const display = sheet.getDataRange().getDisplayValues();
+  const col = values[2].indexOf(headerName);
+  if (col < 0) return [];
+  const result = [];
+  for (let i = 3; i < values.length; i++) {
+    const hasData = values[i].some(function (c) { return c !== "" && c !== null; });
+    if (hasData) result.push(display[i][col]);
   }
-  return String(v || "").trim();
+  return result;
+}
+
+/** "8:15", "08:15:00" o "8:15 AM" (como lo muestre la celda) → "HH:mm". */
+function parseDisplayTime(text) {
+  const s = String(text || "").trim();
+  if (!s) return "";
+  const m = s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])?/);
+  if (!m) return s;
+  let h = parseInt(m[1], 10);
+  const ampm = m[3] ? m[3].toUpperCase() : null;
+  if (ampm === "PM" && h < 12) h += 12;
+  if (ampm === "AM" && h === 12) h = 0;
+  return String(h).padStart(2, "0") + ":" + m[2];
 }
 
 function readNotifConfig() {
+  const horaDisplay = readDisplayColumn("Notificaciones", "Hora");
   const byType = {};
-  readTable("Notificaciones").forEach(function (r) {
+  readTable("Notificaciones").forEach(function (r, i) {
     byType[r["Recordatorio"]] = {
       activo: String(r["Activo"]).trim().toUpperCase() !== "FALSE",
       diaSemana: r["DíaSemana"] ? String(r["DíaSemana"]).trim() : "",
       diasAntes: r["DíasAntes"] ? Number(r["DíasAntes"]) : 1,
-      hora: fmtTime(r["Hora"]),
+      hora: parseDisplayTime(horaDisplay[i]),
       mensaje: r["Mensaje"] || ""
     };
   });
