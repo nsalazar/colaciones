@@ -297,11 +297,17 @@
       "note": "A las 23:59 horas del sábado 5 de septiembre, el reloj pasará a ser la 01:00"
     },
     {
-      "from": "2026-09-08",
-      "to": "2026-09-08",
+      "from": "2026-09-09",
+      "to": "2026-09-10",
       "title": "Actividades Internas Fiestas Patrias",
       "audience": "todos",
       "note": "Durante estos días tendremos actividades internas como: concurso de cueca, comida típica, presentación de organillero, chinchinero y ensayos en general.\n- El horario será normal.\n- No se realizarán talleres extraprogramáticos.\n- La comida típica consistirá en una empanada de pino o queso, y un rico mote con huesillo, con un valor total de $5.500. Cada estudiante deberá realizar el pago y selección de la empanada directamente con la Guía de Salón, antes del lunes 7 de septiembre."
+    },
+    {
+      "date": "2026-09-07",
+      "title": "Plazo máximo pago empanadas",
+      "audience": "todos",
+      "note": "Empanada de pino o queso, y un rico mote con huesillo"
     }
   ],
   "attachments": [
