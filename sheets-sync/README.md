@@ -167,6 +167,22 @@ chequeo de 15 minutos.
 Por defecto manda el correo al dueño del script. Para usar otro correo,
 agrega la Script Property `ALERT_EMAIL` con la dirección que prefieras.
 
+`sendWhatsapp()` revisa el código de respuesta del webhook — antes usaba
+`muteHttpExceptions: true` sin mirar el resultado, así que si Home Assistant
+respondía con error (URL mal copiada, automatización apagada, HA caído),
+Apps Script lo veía como "éxito" y no había ningún rastro del problema ni
+correo de aviso. Ahora cualquier respuesta fuera del rango 200-299 cuenta
+como error y dispara el aviso por correo. Ojo: esto solo detecta que el
+webhook respondió mal — si Home Assistant recibe el webhook (responde 200)
+pero la automatización falla después (ej. el servicio `whatsapp.send_message`
+tira error), eso no se refleja en la respuesta del webhook y no hay forma de
+detectarlo desde acá.
+
+`checkReminders()` también deja un registro de cada corrida en **Executions**
+del editor de Apps Script (aunque no envíe nada): si la hora no coincidió,
+si ya se había enviado hoy, o el resultado exacto del envío (`sent`,
+`reason`, etc.) — útil para diagnosticar sin adivinar.
+
 ## Botones del panel lateral
 
 - **🔍 Validar** — corre `validateData()` y muestra errores/avisos sin

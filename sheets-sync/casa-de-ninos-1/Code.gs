@@ -862,12 +862,16 @@ function fillTemplate(tpl, data) {
 function sendWhatsapp(target, message) {
   const url = PropertiesService.getScriptProperties().getProperty("HA_WEBHOOK_URL");
   if (!url) throw new Error("Falta configurar HA_WEBHOOK_URL en Script Properties.");
-  UrlFetchApp.fetch(url, {
+  const res = UrlFetchApp.fetch(url, {
     method: "post",
     contentType: "application/json",
     payload: JSON.stringify({ target: target, message: message }),
     muteHttpExceptions: true
   });
+  const code = res.getResponseCode();
+  if (code < 200 || code >= 300) {
+    throw new Error("El webhook de Home Assistant respondió " + code + ": " + res.getContentText());
+  }
 }
 
 /* ---------- recordatorio diario (a cada apoderado, directo) ---------- */
@@ -903,7 +907,7 @@ function buildDailyMessageAndSend(conf, target) {
 }
 
 function runDailyReminder(conf) {
-  buildDailyMessageAndSend(conf, addDays(new Date(), conf.diasAntes));
+  return buildDailyMessageAndSend(conf, addDays(new Date(), conf.diasAntes));
 }
 
 /* ---------- recordatorio semanal (al grupo del curso) ---------- */
@@ -981,7 +985,7 @@ function buildWeeklyMessageAndSend(conf, monday) {
 }
 
 function runWeeklyReminder(conf) {
-  buildWeeklyMessageAndSend(conf, nextMonday(new Date()));
+  return buildWeeklyMessageAndSend(conf, nextMonday(new Date()));
 }
 
 /* ---------- pruebas manuales (llamadas desde el panel lateral) ---------- */
@@ -1044,26 +1048,50 @@ function checkReminders() {
   const props = PropertiesService.getScriptProperties();
 
   const diario = notif["Diario"];
-  if (diario && diario.activo && diario.hora === hhmm) {
+  if (!diario) {
+    console.log("Diario: no existe esa fila en Notificaciones.");
+  } else if (!diario.activo) {
+    console.log("Diario: Activo=FALSE, no se revisa.");
+  } else if (diario.hora !== hhmm) {
+    console.log("Diario: hora configurada " + diario.hora + ", hora actual " + hhmm + " (" + TZ + ") — no coincide.");
+  } else {
     const key = "sent_diario_" + today;
-    if (!props.getProperty(key)) {
+    if (props.getProperty(key)) {
+      console.log("Diario: hora coincide (" + hhmm + ") pero ya se había enviado hoy.");
+    } else {
+      console.log("Diario: hora coincide (" + hhmm + "), enviando…");
       try {
-        runDailyReminder(diario);
-        props.setProperty(key, "1");
+        const r = runDailyReminder(diario);
+        console.log("Diario: resultado " + JSON.stringify(r));
+        if (r && r.sent) props.setProperty(key, "1");
       } catch (err) {
+        console.error("Diario: error al enviar — " + err);
         notifyOwnerOfError("recordatorio diario", err);
       }
     }
   }
 
   const semanal = notif["Semanal"];
-  if (semanal && semanal.activo && semanal.hora === hhmm && DOW_ES[now.getDay()] === semanal.diaSemana) {
+  if (!semanal) {
+    console.log("Semanal: no existe esa fila en Notificaciones.");
+  } else if (!semanal.activo) {
+    console.log("Semanal: Activo=FALSE, no se revisa.");
+  } else if (semanal.hora !== hhmm) {
+    console.log("Semanal: hora configurada " + semanal.hora + ", hora actual " + hhmm + " (" + TZ + ") — no coincide.");
+  } else if (DOW_ES[now.getDay()] !== semanal.diaSemana) {
+    console.log("Semanal: hora coincide pero hoy es " + DOW_ES[now.getDay()] + ", configurado para " + semanal.diaSemana + ".");
+  } else {
     const key = "sent_semanal_" + today;
-    if (!props.getProperty(key)) {
+    if (props.getProperty(key)) {
+      console.log("Semanal: hora y día coinciden pero ya se había enviado hoy.");
+    } else {
+      console.log("Semanal: hora y día coinciden, enviando…");
       try {
-        runWeeklyReminder(semanal);
-        props.setProperty(key, "1");
+        const r = runWeeklyReminder(semanal);
+        console.log("Semanal: resultado " + JSON.stringify(r));
+        if (r && r.sent) props.setProperty(key, "1");
       } catch (err) {
+        console.error("Semanal: error al enviar — " + err);
         notifyOwnerOfError("recordatorio semanal", err);
       }
     }
