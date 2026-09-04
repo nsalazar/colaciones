@@ -1097,10 +1097,12 @@ function buildWeeklyImageUrl(curso, primerDiaSemana, weekDays, eventEntries) {
   }
   body.getText().getTextStyle().setFontFamily("Arial").setFontSize(13);
 
-  // Sin flush(), Apps Script puede no haber terminado de aplicar los
-  // cambios cuando se pide la exportación — la imagen sale en blanco
-  // (capturó la diapositiva antes de que el texto/color llegaran a existir).
-  SlidesApp.flush();
+  // SlidesApp no tiene un flush() como SpreadsheetApp — los cambios vía API
+  // quedan guardados casi al toque, pero el endpoint de exportación puede
+  // tardar un instante en reflejarlos. Sin esta espera la imagen sale en
+  // blanco (confirmado: exportaba la diapositiva antes de que el texto y
+  // el color llegaran a existir del lado del servidor).
+  Utilities.sleep(2000);
 
   const pageId = slide.getObjectId();
   const exportUrl = "https://docs.google.com/presentation/d/" + deck.getId() + "/export/png?id=" + deck.getId() + "&pageid=" + pageId;
