@@ -1026,7 +1026,7 @@ function buildWeeklyMessageAndSend(conf, monday) {
   let imageUrl = null;
   let imageError = null;
   try {
-    imageUrl = buildWeeklyImageUrl(cfg.curso, primerDiaSemana, weekDays, eventEntries);
+    imageUrl = buildWeeklyImageUrl(cfg, closures, index, monday, eventEntries, primerDiaSemana);
   } catch (err) {
     imageError = String(err);
     console.error("No se pudo generar/subir la imagen semanal, se manda solo texto: " + err);
@@ -1046,46 +1046,99 @@ function buildWeeklyMessageAndSend(conf, monday) {
   return { sent: true, message: message, image: null, imageError: imageError || undefined };
 }
 
+const WEEKLY_IMAGE_WIDTH = 600;
+const WEEKLY_IMAGE_HEIGHT = 820;
+const DOW_SHORT_ES = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"]; // indexado por Date.getDay()
+
+/** "Pan a gusto con algo para untar (mermelada...)" -> "Pan a gusto con algo para untar" — igual que shortMeal() en app.js. */
+function shortMealEs(text) {
+  return String(text || "").split(" (")[0].trim();
+}
+
 /**
- * Genera una imagen (tarjeta simple) con el resumen de la semana usando
- * Google Slides — es lo único con lo que Apps Script puede "dibujar" algo
- * sin depender de un servicio externo pago (no hay Canvas/DOM en Apps
- * Script). Exporta la diapositiva como PNG y la sube al repo; devuelve la
- * URL pública (raw.githubusercontent.com, no la de Pages — se actualiza al
- * toque con el commit en vez de esperar el build/deploy de Pages).
+ * Genera una imagen — una grilla de 7 días parecida al calendario del
+ * sitio, pero solo de la semana correspondiente — con Google Slides, que es
+ * lo único con lo que Apps Script puede "dibujar" algo sin depender de un
+ * servicio externo pago (no hay Canvas/DOM en Apps Script). Exporta la
+ * diapositiva como PNG y la sube al repo; devuelve la URL pública
+ * (raw.githubusercontent.com, no la de Pages — se actualiza al toque con el
+ * commit en vez de esperar el build/deploy de Pages).
  */
-function buildWeeklyImageUrl(curso, primerDiaSemana, weekDays, eventEntries) {
+function buildWeeklyImageUrl(cfg, closures, index, monday, eventEntries, primerDiaSemana) {
   const deck = getOrCreateWeeklyDeck();
   const slide = deck.getSlides()[0];
   slide.getPageElements().forEach(function (el) { el.remove(); });
   slide.getBackground().setSolidFill("#F3F6F1");
 
   const W = deck.getPageWidth();
+  const margin = 24;
 
   const title = slide.insertTextBox(
     "Colación compartida\nSemana del " + primerDiaSemana,
-    24, 20, W - 48, 66
+    margin, 24, W - margin * 2, 62
   );
   title.getText().getTextStyle()
     .setFontFamily("Arial").setForegroundColor("#262F29").setBold(true).setFontSize(20);
   title.getText().getParagraphs()[1].getRange().getTextStyle().setFontSize(14).setBold(false);
 
-  const body = slide.insertTextBox("", 24, 100, W - 48, 260);
+  // Grilla de 7 columnas (lunes a domingo), 2 filas: encabezado + día.
+  const tableTop = 100;
+  const tableHeight = 150;
+  const table = slide.insertTable(2, 7, margin, tableTop, W - margin * 2, tableHeight);
+
+  for (let col = 0; col < 7; col++) {
+    const d = addDays(monday, col);
+    const iso = toISO(d);
+    const nativeDow = d.getDay();
+    const isWeekend = nativeDow === 0 || nativeDow === 6;
+    const meal = cfg.weekdays[String(nativeDow)];
+
+    const headerCell = table.getCell(0, col);
+    headerCell.getFill().setSolidFill(isWeekend ? "#EDEFEA" : "#E4F2EE");
+    const headerText = headerCell.getText();
+    const dowLabel = DOW_SHORT_ES[nativeDow];
+    const mealLabel = meal ? shortMealEs(meal) : "";
+    headerText.setText(dowLabel + (mealLabel ? "\n" + mealLabel : ""));
+    headerText.getTextStyle().setFontFamily("Arial").setFontSize(7);
+    headerText.getRange(0, dowLabel.length).getTextStyle()
+      .setBold(true).setFontSize(9).setForegroundColor(isWeekend ? "#5C6860" : "#0F5347");
+    if (mealLabel) {
+      headerText.getRange(dowLabel.length + 1, headerText.asString().length).getTextStyle()
+        .setForegroundColor("#5C6860");
+    }
+
+    const dayCell = table.getCell(1, col);
+    const entry = index[iso];
+    const closure = closures[iso];
+    let sub = "";
+    let subColor = "#262F29";
+    let subBold = true;
+    let fill = isWeekend ? "#F8F9F6" : "#FFFFFF";
+    if (entry) {
+      sub = entry.kid;
+    } else if (closure) {
+      sub = (closure.type === "sinColacion" ? "Sin colación" : (closure.reason || "Sin clases"));
+      subColor = closure.type === "sinColacion" ? "#E8730C" : "#B3261E";
+      fill = closure.type === "sinColacion" ? "#FCEADB" : "#FBE4E2";
+    }
+    dayCell.getFill().setSolidFill(fill);
+    const dayText = dayCell.getText();
+    const dayNum = String(d.getDate());
+    dayText.setText(dayNum + (sub ? "\n" + sub : ""));
+    dayText.getTextStyle().setFontFamily("Arial").setFontSize(8);
+    dayText.getRange(0, dayNum.length).getTextStyle().setForegroundColor("#5C6860");
+    if (sub) {
+      dayText.getRange(dayNum.length + 1, dayText.asString().length).getTextStyle()
+        .setBold(subBold).setForegroundColor(subColor);
+    }
+  }
+
+  // Novedades de la semana, debajo de la tabla.
+  const body = slide.insertTextBox("", margin, tableTop + tableHeight + 20, W - margin * 2, WEEKLY_IMAGE_HEIGHT - tableTop - tableHeight - 44);
   const textRange = body.getText();
   let cursor = 0;
-  weekDays.forEach(function (w) {
-    const bold = w.bold;
-    const rest = ": " + w.detail + "\n";
-    textRange.insertText(cursor, bold + rest);
-    textRange.getRange(cursor, cursor + bold.length)
-      .getTextStyle().setBold(true).setForegroundColor("#0F5347");
-    textRange.getRange(cursor + bold.length, cursor + bold.length + rest.length)
-      .getTextStyle().setForegroundColor("#262F29");
-    cursor += bold.length + rest.length;
-  });
-
   if (eventEntries && eventEntries.length) {
-    const header = "\n📌 Novedades de la semana\n";
+    const header = "📌 Novedades de la semana\n";
     textRange.insertText(cursor, header);
     textRange.getRange(cursor, cursor + header.length).getTextStyle().setBold(true);
     cursor += header.length;
@@ -1095,7 +1148,7 @@ function buildWeeklyImageUrl(curso, primerDiaSemana, weekDays, eventEntries) {
       cursor += plain.length;
     });
   }
-  body.getText().getTextStyle().setFontFamily("Arial").setFontSize(13);
+  body.getText().getTextStyle().setFontFamily("Arial").setFontSize(13).setForegroundColor("#262F29");
 
   // SlidesApp no tiene un flush() como SpreadsheetApp — los cambios vía API
   // quedan guardados casi al toque, pero el endpoint de exportación puede
@@ -1114,28 +1167,42 @@ function buildWeeklyImageUrl(curso, primerDiaSemana, weekDays, eventEntries) {
     throw new Error("No se pudo exportar la imagen de Slides: " + res.getResponseCode());
   }
 
-  putBinaryFile(WEEKLY_IMAGE_PATH, res.getBlob(), "Actualizar imagen semanal de " + curso);
+  putBinaryFile(WEEKLY_IMAGE_PATH, res.getBlob(), "Actualizar imagen semanal de " + cfg.curso);
   return RAW_BASE_URL + WEEKLY_IMAGE_PATH + "?v=" + new Date().getTime();
 }
 
 /**
  * La imagen semanal se redibuja cada vez sobre la MISMA diapositiva (no se
  * crea una presentación nueva cada semana) — el id queda guardado en Script
- * Properties. Si la presentación fue borrada a mano, crea una nueva sola.
+ * Properties. Se crea en formato retrato (600x820pt) usando el servicio
+ * avanzado "Slides API" (hay que activarlo: en el editor de Apps Script,
+ * ícono "+" junto a "Services" → Slides API → Add). SlidesApp.create() no
+ * permite elegir el tamaño — siempre crea horizontal — así que la primera
+ * creación pasa por Slides.Presentations.create() en vez de SlidesApp.
  */
 function getOrCreateWeeklyDeck() {
   const props = PropertiesService.getScriptProperties();
   const id = props.getProperty("WEEKLY_SLIDE_ID");
   if (id) {
     try {
-      return SlidesApp.openById(id);
+      const existing = SlidesApp.openById(id);
+      if (existing.getPageWidth() === WEEKLY_IMAGE_WIDTH && existing.getPageHeight() === WEEKLY_IMAGE_HEIGHT) {
+        return existing;
+      }
+      console.log("La presentación guardada tiene otro tamaño (quedó de una versión anterior en horizontal), se crea una nueva en retrato.");
     } catch (err) {
       console.error("No se pudo abrir la presentación guardada (" + id + "), se crea una nueva: " + err);
     }
   }
-  const deck = SlidesApp.create("Colación — imagen semanal (uso interno, no borrar)");
-  props.setProperty("WEEKLY_SLIDE_ID", deck.getId());
-  return deck;
+  const created = Slides.Presentations.create({
+    title: "Colación — imagen semanal (uso interno, no borrar)",
+    pageSize: {
+      width: { magnitude: WEEKLY_IMAGE_WIDTH, unit: "PT" },
+      height: { magnitude: WEEKLY_IMAGE_HEIGHT, unit: "PT" }
+    }
+  });
+  props.setProperty("WEEKLY_SLIDE_ID", created.presentationId);
+  return SlidesApp.openById(created.presentationId);
 }
 
 function runWeeklyReminder(conf) {

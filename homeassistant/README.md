@@ -116,9 +116,9 @@ texto plano (`{tags}` en la plantilla del Sheet).
 
 ## Imagen del resumen semanal
 
-El resumen semanal (viernes al grupo) va con una **imagen** — una tarjeta
-simple con el día/niño de cada día y las novedades — además del texto, que
-queda como pie de foto (`caption`).
+El resumen semanal (viernes al grupo) va con una **imagen** en formato
+retrato — una grilla de 7 días parecida al calendario del sitio, pero solo
+de esa semana — además del texto, que queda como pie de foto (`caption`).
 
 La imagen no se genera en el navegador (el "Compartir imagen" del sitio usa
 `html2canvas`, que no existe en Apps Script): se genera **del lado del
@@ -126,9 +126,15 @@ servidor**, con Google Slides — es lo único con lo que Apps Script puede
 "dibujar" algo sin depender de un servicio externo pago:
 
 1. `buildWeeklyImageUrl()` en `Code.gs` redibuja siempre la **misma**
-   diapositiva (una presentación llamada "Colación — imagen semanal (uso
-   interno, no borrar)", creada la primera vez y guardada por su id en
-   Script Properties — no crea una nueva cada semana).
+   diapositiva (una presentación en retrato de 600x820pt llamada "Colación
+   — imagen semanal (uso interno, no borrar)", creada la primera vez y
+   guardada por su id en Script Properties — no crea una nueva cada
+   semana). El tamaño retrato se pide con el servicio avanzado "Slides API"
+   (`Slides.Presentations.create({..., pageSize: {...}})`) porque
+   `SlidesApp.create()` siempre crea horizontal y no permite cambiarlo
+   después — hay que **activar ese servicio una vez** en el editor de Apps
+   Script: ícono **"+"** junto a "Services" (columna izquierda) → **Slides
+   API** → Add.
 2. La exporta como PNG (`.../export/png`, autenticado con
    `ScriptApp.getOAuthToken()`) y la sube al repo en
    `data/<curso>/weekly-preview.png` (mismo mecanismo que ya usa `publish()`
