@@ -950,7 +950,7 @@ function buildWeeklyMessageAndSend(conf, monday) {
     }
   }
 
-  const eventLines = [];
+  const eventEntries = [];
   (cfg.events || []).forEach(function (e) {
     const dates = [];
     if (e.date) {
@@ -965,10 +965,16 @@ function buildWeeklyMessageAndSend(conf, monday) {
       return d >= monday && d < sunday;
     });
     if (inWeekDates.length) {
-      const first = parseDateLocal(inWeekDates[0]);
-      eventLines.push("- [" + novedadFechaEs(first) + "] " + e.title + (e.time ? " (" + e.time + ")" : ""));
+      const firstIso = inWeekDates[0];
+      const first = parseDateLocal(firstIso);
+      eventEntries.push({
+        date: firstIso,
+        line: "- [" + novedadFechaEs(first) + "] " + e.title + (e.time ? " (" + e.time + ")" : "")
+      });
     }
   });
+  eventEntries.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  const eventLines = eventEntries.map(function (entry) { return entry.line; });
 
   const novedades = eventLines.length
     ? "\n\n📌 Novedades de la semana:\n" + eventLines.join("\n")
