@@ -706,13 +706,13 @@ function longDateEs(d) {
   return d.getDate() + " de " + MESES_ES[d.getMonth()];
 }
 
-/** "Martes 01-Septiembre" — usado en el bloque de novedades del resumen semanal. */
+/** "Martes 01-Sep" — usado en el bloque de novedades del resumen semanal. */
 function novedadFechaEs(d) {
   const dow = DOW_ES[d.getDay()];
   const dd = String(d.getDate()).padStart(2, "0");
   const mes = MESES_ES[d.getMonth()];
-  const mesCap = mes.charAt(0).toUpperCase() + mes.slice(1);
-  return dow + " " + dd + "-" + mesCap;
+  const mesAbr = mes.charAt(0).toUpperCase() + mes.slice(1, 3);
+  return dow + " " + dd + "-" + mesAbr;
 }
 
 /** "01-Septiembre" — usado como {primer_dia_semana} en el resumen semanal. */
@@ -980,7 +980,7 @@ function buildWeeklyMessageAndSend(conf, monday) {
   const eventLines = eventEntries.map(function (entry) { return entry.line; });
 
   const novedades = eventLines.length
-    ? "\n\n📌 Novedades de la semana:\n" + eventLines.join("\n")
+    ? "\n\n*📌 Novedades de la semana:*\n" + eventLines.join("\n")
     : "";
 
   const message = fillTemplate(conf.mensaje, {
