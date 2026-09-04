@@ -1038,6 +1038,14 @@ function notifyOwnerOfError(context, err) {
  * alguno de los dos recordatorios, según lo configurado en "Notificaciones".
  * Cada recordatorio se aísla en su propio try/catch: si uno falla, el otro
  * igual se intenta, y no se marca como enviado para reintentar en 15 min.
+ *
+ * La hora configurada se trata como "a partir de esta hora", no como una
+ * igualdad exacta: el trigger de 15 min de Apps Script no corre justo en
+ * :00/:15/:30/:45 (corre cada 15 min desde el momento en que se creó, ej.
+ * :04:48, :19:48...), así que comparar con === casi nunca calzaba y el
+ * recordatorio nunca salía. Comparar con >= dispara en el primer chequeo
+ * de 15 min que ya pasó la hora configurada — como mucho, unos minutos
+ * tarde — y el guard de "ya enviado hoy" evita que se repita.
  */
 function checkReminders() {
   let notif;
@@ -1058,14 +1066,14 @@ function checkReminders() {
     console.log("Diario: no existe esa fila en Notificaciones.");
   } else if (!diario.activo) {
     console.log("Diario: Activo=FALSE, no se revisa.");
-  } else if (diario.hora !== hhmm) {
-    console.log("Diario: hora configurada " + diario.hora + ", hora actual " + hhmm + " (" + TZ + ") — no coincide.");
+  } else if (hhmm < diario.hora) {
+    console.log("Diario: hora configurada " + diario.hora + ", hora actual " + hhmm + " (" + TZ + ") — todavía no llega.");
   } else {
     const key = "sent_diario_" + today;
     if (props.getProperty(key)) {
-      console.log("Diario: hora coincide (" + hhmm + ") pero ya se había enviado hoy.");
+      console.log("Diario: hora " + diario.hora + " ya pasó (" + hhmm + ") pero ya se había enviado hoy.");
     } else {
-      console.log("Diario: hora coincide (" + hhmm + "), enviando…");
+      console.log("Diario: hora " + diario.hora + " ya pasó (" + hhmm + "), enviando…");
       try {
         const r = runDailyReminder(diario);
         console.log("Diario: resultado " + JSON.stringify(r));
@@ -1082,16 +1090,16 @@ function checkReminders() {
     console.log("Semanal: no existe esa fila en Notificaciones.");
   } else if (!semanal.activo) {
     console.log("Semanal: Activo=FALSE, no se revisa.");
-  } else if (semanal.hora !== hhmm) {
-    console.log("Semanal: hora configurada " + semanal.hora + ", hora actual " + hhmm + " (" + TZ + ") — no coincide.");
+  } else if (hhmm < semanal.hora) {
+    console.log("Semanal: hora configurada " + semanal.hora + ", hora actual " + hhmm + " (" + TZ + ") — todavía no llega.");
   } else if (DOW_ES[now.getDay()] !== semanal.diaSemana) {
-    console.log("Semanal: hora coincide pero hoy es " + DOW_ES[now.getDay()] + ", configurado para " + semanal.diaSemana + ".");
+    console.log("Semanal: ya pasó la hora pero hoy es " + DOW_ES[now.getDay()] + ", configurado para " + semanal.diaSemana + ".");
   } else {
     const key = "sent_semanal_" + today;
     if (props.getProperty(key)) {
-      console.log("Semanal: hora y día coinciden pero ya se había enviado hoy.");
+      console.log("Semanal: ya pasó la hora y es el día configurado, pero ya se había enviado hoy.");
     } else {
-      console.log("Semanal: hora y día coinciden, enviando…");
+      console.log("Semanal: ya pasó la hora y es el día configurado, enviando…");
       try {
         const r = runWeeklyReminder(semanal);
         console.log("Semanal: resultado " + JSON.stringify(r));
