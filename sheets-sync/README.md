@@ -201,7 +201,13 @@ si ya se había enviado hoy, o el resultado exacto del envío (`sent`,
   `testWeekly('next')`, `testWeekly('this')` y `testDaily(fecha)`
   directamente, sin pasar por el trigger automático ni por el guard que
   evita reenviar el mismo día. Sirven para probar sin esperar a la hora
-  configurada.
+  configurada. El resumen semanal manda una imagen además del texto — ver
+  [../homeassistant/README.md](../homeassistant/README.md#imagen-del-resumen-semanal)
+  — y el resultado de "Enviar semanal" la muestra ahí mismo en el panel.
+- **🔄 Diario / 🔄 Semanal** ("Reiniciar envío de hoy") — borran el flag de
+  "ya enviado hoy" sin mandar nada, para que el próximo chequeo automático
+  (cada 15 min) pueda reintentar hoy mismo. Útil si cambiaste la Hora en
+  Notificaciones después de que ya se envió.
 
 ## Placeholders de los mensajes
 

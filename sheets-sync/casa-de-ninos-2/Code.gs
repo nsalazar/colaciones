@@ -14,6 +14,11 @@
 const REPO = "nsalazar/colaciones";
 const SCHEDULE_PATH = "data/casa-de-ninos-2/schedule.json";
 const ANNOUNCEMENTS_PATH = "data/casa-de-ninos-2/announcements.json";
+const WEEKLY_IMAGE_PATH = "data/casa-de-ninos-2/weekly-preview.png";
+/** raw.githubusercontent.com en vez de la URL de Pages: se actualiza al toque
+ *  con el commit, sin esperar el build/deploy de GitHub Pages (que puede
+ *  tardar hasta un par de minutos). */
+const RAW_BASE_URL = "https://raw.githubusercontent.com/" + REPO + "/main/";
 
 const DIRTY_KEY = "colacion_dirty";
 
@@ -231,21 +236,27 @@ function githubRequest(method, path, payload) {
   return { code: res.getResponseCode(), body: res.getContentText() };
 }
 
-function putFile(path, jsonObj, message) {
+function putContentBytes(path, bytes, message) {
   const getRes = githubRequest("get", path);
   let sha;
   if (getRes.code === 200) sha = JSON.parse(getRes.body).sha;
 
-  const content = Utilities.base64Encode(
-    Utilities.newBlob(JSON.stringify(jsonObj, null, 2) + "\n").getBytes()
-  );
-  const payload = { message: message, content: content };
+  const payload = { message: message, content: Utilities.base64Encode(bytes) };
   if (sha) payload.sha = sha;
 
   const putRes = githubRequest("put", path, payload);
   if (putRes.code !== 200 && putRes.code !== 201) {
     throw new Error("Error publicando " + path + ": " + putRes.code + " " + putRes.body);
   }
+}
+
+function putFile(path, jsonObj, message) {
+  putContentBytes(path, Utilities.newBlob(JSON.stringify(jsonObj, null, 2) + "\n").getBytes(), message);
+}
+
+/** Sube un archivo binario (ej. una imagen) al repo. */
+function putBinaryFile(path, blob, message) {
+  putContentBytes(path, blob.getBytes(), message);
 }
 
 /**
@@ -877,6 +888,26 @@ function sendWhatsapp(target, message) {
   }
 }
 
+/**
+ * Igual que sendWhatsapp() pero manda una imagen con pie de foto — la
+ * automatización de HA tiene que revisar si llega "url" y llamar a
+ * whatsapp.send_image en vez de whatsapp.send_message. Ver homeassistant/README.md.
+ */
+function sendWhatsappImage(target, imageUrl, caption) {
+  const url = PropertiesService.getScriptProperties().getProperty("HA_WEBHOOK_URL");
+  if (!url) throw new Error("Falta configurar HA_WEBHOOK_URL en Script Properties.");
+  const res = UrlFetchApp.fetch(url, {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify({ target: target, url: imageUrl, message: caption }),
+    muteHttpExceptions: true
+  });
+  const code = res.getResponseCode();
+  if (code < 200 || code >= 300) {
+    throw new Error("El webhook de Home Assistant respondió " + code + ": " + res.getContentText());
+  }
+}
+
 /* ---------- recordatorio diario (a cada apoderado, directo) ---------- */
 
 /** Arma y envía el recordatorio diario para una fecha objetivo concreta. */
@@ -936,7 +967,7 @@ function buildWeeklyMessageAndSend(conf, monday) {
   const index = buildIndexMap(cfg, closures);
 
   const sunday = addDays(monday, 7);
-  const lines = [];
+  const weekDays = [];
 
   for (let i = 0; i < 5; i++) {
     const d = addDays(monday, i);
@@ -945,13 +976,14 @@ function buildWeeklyMessageAndSend(conf, monday) {
     const entry = index[iso];
     const closure = closures[iso];
     if (entry) {
-      lines.push("- *" + dowName + " (" + entry.kid + ")*: " + entry.meal);
+      weekDays.push({ bold: dowName + " (" + entry.kid + ")", detail: entry.meal });
     } else if (closure) {
-      lines.push("- *" + dowName + "*: " + closure.reason);
+      weekDays.push({ bold: dowName, detail: closure.reason });
     } else {
-      lines.push("- *" + dowName + "*: (sin información)");
+      weekDays.push({ bold: dowName, detail: "(sin información)" });
     }
   }
+  const lines = weekDays.map(function (w) { return "- *" + w.bold + "*: " + w.detail; });
 
   const eventEntries = [];
   (cfg.events || []).forEach(function (e) {
@@ -983,14 +1015,120 @@ function buildWeeklyMessageAndSend(conf, monday) {
     ? "\n\n*📌 Novedades de la semana:*\n" + eventLines.join("\n")
     : "";
 
+  const primerDiaSemana = soloFechaEs(monday);
   const message = fillTemplate(conf.mensaje, {
     semana: lines.join("\n"),
     novedades: novedades,
-    primer_dia_semana: soloFechaEs(monday)
+    primer_dia_semana: primerDiaSemana
   });
 
-  sendWhatsapp(groupId + "@g.us", message);
-  return { sent: true, message: message };
+  const target = groupId + "@g.us";
+  let imageUrl = null;
+  let imageError = null;
+  try {
+    imageUrl = buildWeeklyImageUrl(cfg.curso, primerDiaSemana, weekDays, eventEntries);
+  } catch (err) {
+    imageError = String(err);
+    console.error("No se pudo generar/subir la imagen semanal, se manda solo texto: " + err);
+  }
+
+  if (imageUrl) {
+    try {
+      sendWhatsappImage(target, imageUrl, message);
+      return { sent: true, message: message, image: imageUrl };
+    } catch (err) {
+      imageError = String(err);
+      console.error("No se pudo mandar la imagen semanal, se manda solo texto: " + err);
+    }
+  }
+
+  sendWhatsapp(target, message);
+  return { sent: true, message: message, image: null, imageError: imageError || undefined };
+}
+
+/**
+ * Genera una imagen (tarjeta simple) con el resumen de la semana usando
+ * Google Slides — es lo único con lo que Apps Script puede "dibujar" algo
+ * sin depender de un servicio externo pago (no hay Canvas/DOM en Apps
+ * Script). Exporta la diapositiva como PNG y la sube al repo; devuelve la
+ * URL pública (raw.githubusercontent.com, no la de Pages — se actualiza al
+ * toque con el commit en vez de esperar el build/deploy de Pages).
+ */
+function buildWeeklyImageUrl(curso, primerDiaSemana, weekDays, eventEntries) {
+  const deck = getOrCreateWeeklyDeck();
+  const slide = deck.getSlides()[0];
+  slide.getPageElements().forEach(function (el) { el.remove(); });
+  slide.getBackground().setSolidFill("#F3F6F1");
+
+  const W = deck.getPageWidth();
+
+  const title = slide.insertTextBox(
+    "Colación compartida\nSemana del " + primerDiaSemana,
+    24, 20, W - 48, 66
+  );
+  title.getText().getTextStyle()
+    .setFontFamily("Arial").setForegroundColor("#262F29").setBold(true).setFontSize(20);
+  title.getText().getParagraphs()[1].getRange().getTextStyle().setFontSize(14).setBold(false);
+
+  const body = slide.insertTextBox("", 24, 100, W - 48, 260);
+  const textRange = body.getText();
+  let cursor = 0;
+  weekDays.forEach(function (w) {
+    const bold = w.bold;
+    const rest = ": " + w.detail + "\n";
+    textRange.insertText(cursor, bold + rest);
+    textRange.getRange(cursor, cursor + bold.length)
+      .getTextStyle().setBold(true).setForegroundColor("#0F5347");
+    textRange.getRange(cursor + bold.length, cursor + bold.length + rest.length)
+      .getTextStyle().setForegroundColor("#262F29");
+    cursor += bold.length + rest.length;
+  });
+
+  if (eventEntries && eventEntries.length) {
+    const header = "\n📌 Novedades de la semana\n";
+    textRange.insertText(cursor, header);
+    textRange.getRange(cursor, cursor + header.length).getTextStyle().setBold(true);
+    cursor += header.length;
+    eventEntries.forEach(function (e) {
+      const plain = e.line.replace(/^- /, "") + "\n";
+      textRange.insertText(cursor, plain);
+      cursor += plain.length;
+    });
+  }
+  body.getText().getTextStyle().setFontFamily("Arial").setFontSize(13);
+
+  const pageId = slide.getObjectId();
+  const exportUrl = "https://docs.google.com/presentation/d/" + deck.getId() + "/export/png?id=" + deck.getId() + "&pageid=" + pageId;
+  const res = UrlFetchApp.fetch(exportUrl, {
+    headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) {
+    throw new Error("No se pudo exportar la imagen de Slides: " + res.getResponseCode());
+  }
+
+  putBinaryFile(WEEKLY_IMAGE_PATH, res.getBlob(), "Actualizar imagen semanal de " + curso);
+  return RAW_BASE_URL + WEEKLY_IMAGE_PATH + "?v=" + new Date().getTime();
+}
+
+/**
+ * La imagen semanal se redibuja cada vez sobre la MISMA diapositiva (no se
+ * crea una presentación nueva cada semana) — el id queda guardado en Script
+ * Properties. Si la presentación fue borrada a mano, crea una nueva sola.
+ */
+function getOrCreateWeeklyDeck() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty("WEEKLY_SLIDE_ID");
+  if (id) {
+    try {
+      return SlidesApp.openById(id);
+    } catch (err) {
+      console.error("No se pudo abrir la presentación guardada (" + id + "), se crea una nueva: " + err);
+    }
+  }
+  const deck = SlidesApp.create("Colación — imagen semanal (uso interno, no borrar)");
+  props.setProperty("WEEKLY_SLIDE_ID", deck.getId());
+  return deck;
 }
 
 function runWeeklyReminder(conf) {
