@@ -1065,14 +1065,36 @@ function shortMealEs(text) {
  * eso para decidir si hay que esperar más y reintentar, en vez de adivinar
  * un número de segundos fijo.
  */
+/**
+ * Antes de exportar, confirma vía la API (Slides.Presentations.Pages.get,
+ * una consulta liviana) que la diapositiva REALMENTE tiene los elementos
+ * insertados — no basta con que SlidesApp no haya tirado error al
+ * insertarlos. Confirmado con una diapositiva recién creada: 4 intentos de
+ * exportar con esperas crecientes (hasta ~15s en total) dieron el
+ * *mismo* tamaño en blanco cada vez, es decir, el contenido nunca llegó a
+ * existir del lado del servidor a tiempo — no era cosa de esperar un poco
+ * más el export, sino de que la diapositiva misma (recién creada) tarda en
+ * quedar lista para que cualquier lectura posterior (API o export) la vea.
+ */
+function waitForSlideElements(presentationId, pageId, expectedCount) {
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    const page = Slides.Presentations.Pages.get(presentationId, pageId);
+    const count = (page.pageElements || []).length;
+    console.log("Verificar contenido de la diapositiva, intento " + attempt + ": " + count + " elementos (se esperan " + expectedCount + ").");
+    if (count >= expectedCount) return true;
+    Utilities.sleep(attempt * 2000);
+  }
+  return false;
+}
+
 function fetchSlideExportPng(deck, slide) {
   const pageId = slide.getObjectId();
   const exportUrl = "https://docs.google.com/presentation/d/" + deck.getId() + "/export/png?id=" + deck.getId() + "&pageid=" + pageId;
   const headers = { Authorization: "Bearer " + ScriptApp.getOAuthToken() };
   const minBytes = 10000;
 
-  for (let attempt = 1; attempt <= 4; attempt++) {
-    Utilities.sleep(attempt * 1500);
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    Utilities.sleep(attempt * 2000);
     const res = UrlFetchApp.fetch(exportUrl, { headers: headers, muteHttpExceptions: true });
     if (res.getResponseCode() !== 200) {
       throw new Error("No se pudo exportar la imagen de Slides: " + res.getResponseCode());
@@ -1179,6 +1201,12 @@ function buildWeeklyImageUrl(cfg, closures, index, monday, eventEntries, primerD
     });
   }
   body.getText().getTextStyle().setFontFamily("Arial").setFontSize(13).setForegroundColor("#262F29");
+
+  // title + table + body = 3 elementos en la diapositiva.
+  const ready = waitForSlideElements(deck.getId(), slide.getObjectId(), 3);
+  if (!ready) {
+    console.error("La diapositiva no reflejó los cambios a tiempo (se exporta igual, puede salir en blanco).");
+  }
 
   const blob = fetchSlideExportPng(deck, slide);
   putBinaryFile(WEEKLY_IMAGE_PATH, blob, "Actualizar imagen semanal de " + cfg.curso);
