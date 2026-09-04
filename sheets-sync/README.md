@@ -241,8 +241,11 @@ Sheet nunca puede hacerlo desaparecer. Ver
 [../homeassistant/README.md](../homeassistant/README.md).
 
 `Activo = FALSE` en una fila de Notificaciones desactiva ese recordatorio
-sin borrar la fila. `Hora` es `HH:mm`, en punto o en cuartos (`:15`/`:30`/
-`:45`), porque el chequeo automático corre cada 15 minutos.
+sin borrar la fila. `Hora` es `HH:mm`, cualquier minuto — el chequeo
+automático (cada 15 min) trata la hora configurada como "a partir de esta
+hora", no como una igualdad exacta, así que dispara en el primer chequeo
+que ya la pasó (como mucho, unos minutos tarde) en vez de exigir que
+coincida al minuto justo con el momento exacto en que corre el trigger.
 
 ## Agregar un curso nuevo
 
