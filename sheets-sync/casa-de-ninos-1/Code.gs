@@ -1056,6 +1056,36 @@ function shortMealEs(text) {
 }
 
 /**
+ * Exporta una diapositiva a PNG, reintentando si sale en blanco. SlidesApp
+ * no tiene un flush() como SpreadsheetApp: los cambios vía API quedan
+ * guardados casi al toque, pero el endpoint de exportación puede tardar en
+ * reflejarlos — cuánto, depende de cuánto se editó (una tabla con 14 celdas
+ * tarda más que un par de cajas de texto). Una imagen en blanco (fondo
+ * sólido) pesa unos pocos KB; con contenido real pesa bastante más — se usa
+ * eso para decidir si hay que esperar más y reintentar, en vez de adivinar
+ * un número de segundos fijo.
+ */
+function fetchSlideExportPng(deck, slide) {
+  const pageId = slide.getObjectId();
+  const exportUrl = "https://docs.google.com/presentation/d/" + deck.getId() + "/export/png?id=" + deck.getId() + "&pageid=" + pageId;
+  const headers = { Authorization: "Bearer " + ScriptApp.getOAuthToken() };
+  const minBytes = 10000;
+
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    Utilities.sleep(attempt * 1500);
+    const res = UrlFetchApp.fetch(exportUrl, { headers: headers, muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) {
+      throw new Error("No se pudo exportar la imagen de Slides: " + res.getResponseCode());
+    }
+    const blob = res.getBlob();
+    const size = blob.getBytes().length;
+    console.log("Exportar imagen semanal, intento " + attempt + ": " + size + " bytes.");
+    if (size >= minBytes) return blob;
+  }
+  throw new Error("La imagen exportada seguía pareciendo en blanco después de varios intentos.");
+}
+
+/**
  * Genera una imagen — una grilla de 7 días parecida al calendario del
  * sitio, pero solo de la semana correspondiente — con Google Slides, que es
  * lo único con lo que Apps Script puede "dibujar" algo sin depender de un
@@ -1150,24 +1180,8 @@ function buildWeeklyImageUrl(cfg, closures, index, monday, eventEntries, primerD
   }
   body.getText().getTextStyle().setFontFamily("Arial").setFontSize(13).setForegroundColor("#262F29");
 
-  // SlidesApp no tiene un flush() como SpreadsheetApp — los cambios vía API
-  // quedan guardados casi al toque, pero el endpoint de exportación puede
-  // tardar un instante en reflejarlos. Sin esta espera la imagen sale en
-  // blanco (confirmado: exportaba la diapositiva antes de que el texto y
-  // el color llegaran a existir del lado del servidor).
-  Utilities.sleep(2000);
-
-  const pageId = slide.getObjectId();
-  const exportUrl = "https://docs.google.com/presentation/d/" + deck.getId() + "/export/png?id=" + deck.getId() + "&pageid=" + pageId;
-  const res = UrlFetchApp.fetch(exportUrl, {
-    headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
-    muteHttpExceptions: true
-  });
-  if (res.getResponseCode() !== 200) {
-    throw new Error("No se pudo exportar la imagen de Slides: " + res.getResponseCode());
-  }
-
-  putBinaryFile(WEEKLY_IMAGE_PATH, res.getBlob(), "Actualizar imagen semanal de " + cfg.curso);
+  const blob = fetchSlideExportPng(deck, slide);
+  putBinaryFile(WEEKLY_IMAGE_PATH, blob, "Actualizar imagen semanal de " + cfg.curso);
   return RAW_BASE_URL + WEEKLY_IMAGE_PATH + "?v=" + new Date().getTime();
 }
 
