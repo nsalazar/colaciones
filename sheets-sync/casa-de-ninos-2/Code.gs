@@ -60,7 +60,8 @@ function onEdit(e) {
 }
 
 function showSidebar() {
-  const html = HtmlService.createHtmlOutputFromFile("Sidebar").setTitle("Publicar a GitHub");
+  const curso = readConfigMap()["Curso"] || "";
+  const html = HtmlService.createHtmlOutputFromFile("Sidebar").setTitle("Colación — " + curso);
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
@@ -72,14 +73,16 @@ function showSidebar() {
  * directo en la pantalla de inicio del celular. Ver sheets-sync/README.md.
  */
 function doGet() {
+  const curso = readConfigMap()["Curso"] || "";
   return HtmlService.createHtmlOutputFromFile("Sidebar")
-    .setTitle("Colación — Panel")
+    .setTitle("Colación — " + curso)
     .addMetaTag("viewport", "width=device-width, initial-scale=1");
 }
 
 function getStatus() {
   const dirty = PropertiesService.getDocumentProperties().getProperty(DIRTY_KEY) === "true";
-  return { dirty: dirty };
+  const curso = readConfigMap()["Curso"] || "";
+  return { dirty: dirty, curso: curso };
 }
 
 function readTable(sheetName) {
@@ -1031,6 +1034,19 @@ function notifyOwnerOfError(context, err) {
   } catch (mailErr) {
     console.error("No se pudo enviar el correo de aviso: " + mailErr);
   }
+}
+
+/**
+ * Borra el flag de "ya enviado hoy" (Diario o Semanal) para que el próximo
+ * chequeo automático de checkReminders() pueda volver a intentarlo hoy
+ * mismo. No envía nada por sí sola — solo destraba el guard. Útil cuando
+ * ya se envió con una hora y después se cambió la hora en Notificaciones.
+ */
+function resetSentFlag(tipo) {
+  const today = Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd");
+  const key = (tipo === "Semanal" ? "sent_semanal_" : "sent_diario_") + today;
+  PropertiesService.getScriptProperties().deleteProperty(key);
+  return { ok: true, tipo: tipo };
 }
 
 /**

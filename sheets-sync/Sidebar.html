@@ -12,7 +12,11 @@
   h3 { font-size: 13px; margin: 18px 0 8px; border-top: 1px solid #ddd; padding-top: 14px; }
   input[type="date"] { width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
   .testmsg { margin-top: 4px; margin-bottom: 16px; font-size: 11px; color: #444; background: #f5f5f5; border-radius: 6px; padding: 8px; white-space: pre-wrap; }
+  #cursoTitle { margin: 0 0 12px; font-size: 16px; font-weight: bold; color: #0F5347; }
+  .help { font-size: 11px; color: #666; margin: 0 0 8px; }
 </style>
+
+<h2 id="cursoTitle">Colación — …</h2>
 
 <div id="status">Cargando…</div>
 
@@ -24,6 +28,15 @@
 
 <button id="btnRevert" class="danger">↩️ Deshacer cambios (volver a lo publicado)</button>
 <div id="msgRevert" class="testmsg" style="display:none"></div>
+
+<h3>Reiniciar envío de hoy</h3>
+<p class="help">Si cambiaste la Hora en Notificaciones después de que ya se
+envió hoy, esto no reenvía nada por sí solo — borra el aviso de "ya enviado
+hoy" para que el próximo chequeo automático (cada 15 min) pueda intentarlo
+de nuevo si la hora nueva ya se cumplió.</p>
+<button id="btnResetDiario" class="ghost">🔄 Diario</button>
+<button id="btnResetSemanal" class="ghost">🔄 Semanal</button>
+<div id="msgReset" class="testmsg" style="display:none"></div>
 
 <h3>Forzar Notificaciones 📤</h3>
 
@@ -38,6 +51,7 @@
 <script>
   function refresh() {
     google.script.run.withSuccessHandler(function (s) {
+      document.getElementById('cursoTitle').textContent = 'Colación — ' + (s.curso || '(sin nombre)');
       var statusEl = document.getElementById('status');
       var btn = document.getElementById('btn');
       if (s.dirty) {
@@ -150,6 +164,35 @@
         btn.disabled = false;
       })
       .revertFromGithub();
+  });
+
+  function resetFlag(tipo, button) {
+    var ok = confirm(
+      '¿Reiniciar el aviso de "ya enviado hoy" para ' + tipo + '?\n\n' +
+      'El próximo chequeo automático (cada 15 min) va a intentar enviarlo ' +
+      'de nuevo si la hora configurada ya se cumplió.'
+    );
+    if (!ok) return;
+    button.disabled = true;
+    var box = document.getElementById('msgReset');
+    box.style.display = 'block';
+    box.textContent = 'Reiniciando…';
+    google.script.run
+      .withSuccessHandler(function (r) {
+        box.textContent = '✅ Flag de ' + r.tipo + ' reiniciado. El próximo chequeo automático puede volver a enviarlo.';
+        button.disabled = false;
+      })
+      .withFailureHandler(function (err) {
+        box.textContent = '❌ Error: ' + err.message;
+        button.disabled = false;
+      })
+      .resetSentFlag(tipo);
+  }
+  document.getElementById('btnResetDiario').addEventListener('click', function () {
+    resetFlag('Diario', this);
+  });
+  document.getElementById('btnResetSemanal').addEventListener('click', function () {
+    resetFlag('Semanal', this);
   });
 
   document.getElementById('btnWeeklyNext').addEventListener('click', function () {
