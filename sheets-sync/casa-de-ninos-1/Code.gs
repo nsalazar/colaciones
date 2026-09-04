@@ -1097,6 +1097,11 @@ function buildWeeklyImageUrl(curso, primerDiaSemana, weekDays, eventEntries) {
   }
   body.getText().getTextStyle().setFontFamily("Arial").setFontSize(13);
 
+  // Sin flush(), Apps Script puede no haber terminado de aplicar los
+  // cambios cuando se pide la exportación — la imagen sale en blanco
+  // (capturó la diapositiva antes de que el texto/color llegaran a existir).
+  SlidesApp.flush();
+
   const pageId = slide.getObjectId();
   const exportUrl = "https://docs.google.com/presentation/d/" + deck.getId() + "/export/png?id=" + deck.getId() + "&pageid=" + pageId;
   const res = UrlFetchApp.fetch(exportUrl, {
