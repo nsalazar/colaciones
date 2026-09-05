@@ -957,10 +957,12 @@ function nextMonday(from) {
 
 /** Arma y envía el resumen semanal para la semana que empieza en `monday`. */
 function buildWeeklyMessageAndSend(conf, monday) {
-  const groupId = String(readConfigMap()["ID de Grupo WhatsApp"] || "").trim();
+  const configMap = readConfigMap();
+  const groupId = String(configMap["ID de Grupo WhatsApp"] || "").trim();
   if (!groupId) {
     return { sent: false, reason: "No hay 'ID de Grupo WhatsApp' configurado en la pestaña Config." };
   }
+  const cursoAlias = String(configMap["Alias"] || configMap["Curso"] || "").trim();
 
   const cfg = buildSchedule();
   const closures = expandClosuresMap(cfg.closures);
@@ -968,6 +970,7 @@ function buildWeeklyMessageAndSend(conf, monday) {
 
   const sunday = addDays(monday, 7);
   const weekDays = [];
+  const imageDays = [];
 
   for (let i = 0; i < 5; i++) {
     const d = addDays(monday, i);
@@ -982,6 +985,14 @@ function buildWeeklyMessageAndSend(conf, monday) {
     } else {
       weekDays.push({ bold: dowName, detail: "(sin información)" });
     }
+    imageDays.push({
+      date: d.getDate(),
+      dow: d.getDay(),
+      meal: cfg.weekdays[String(d.getDay())] || "",
+      kid: entry ? entry.kid : "",
+      closureText: closure ? (closure.type === "sinColacion" ? "Sin colación" : (closure.reason || "Sin clases")) : "",
+      closureKind: closure ? closure.type : ""
+    });
   }
   const lines = weekDays.map(function (w) { return "- *" + w.bold + "*: " + w.detail; });
 
@@ -1002,9 +1013,19 @@ function buildWeeklyMessageAndSend(conf, monday) {
     if (inWeekDates.length) {
       const firstIso = inWeekDates[0];
       const first = parseDateLocal(firstIso);
+      const audience = e.audience && e.audience !== "todos"
+        ? (Array.isArray(e.audience) ? e.audience.join(", ") : e.audience)
+        : "";
       eventEntries.push({
         date: firstIso,
-        line: "- [" + novedadFechaEs(first) + "] " + e.title + (e.time ? " (" + e.time + ")" : "")
+        line: "- [" + novedadFechaEs(first) + "] " + e.title + (e.time ? " (" + e.time + ")" : ""),
+        dowFull: DOW_ES[first.getDay()],
+        day: first.getDate(),
+        monthAbr: MESES_ES[first.getMonth()].charAt(0).toUpperCase() + MESES_ES[first.getMonth()].slice(1, 3),
+        time: e.time || "",
+        title: e.title || "",
+        audience: audience,
+        note: e.place || e.note || ""
       });
     }
   });
@@ -1026,7 +1047,7 @@ function buildWeeklyMessageAndSend(conf, monday) {
   let imageUrl = null;
   let imageError = null;
   try {
-    imageUrl = buildWeeklyImageUrl(cfg, closures, index, monday, eventEntries, primerDiaSemana);
+    imageUrl = buildWeeklyImageUrl(cfg.curso, cursoAlias, primerDiaSemana, imageDays, eventEntries);
   } catch (err) {
     imageError = String(err);
     console.error("No se pudo generar/subir la imagen semanal, se manda solo texto: " + err);
@@ -1046,205 +1067,197 @@ function buildWeeklyMessageAndSend(conf, monday) {
   return { sent: true, message: message, image: null, imageError: imageError || undefined };
 }
 
-const WEEKLY_IMAGE_WIDTH = 600;
-const WEEKLY_IMAGE_HEIGHT = 820;
-const DOW_SHORT_ES = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"]; // indexado por Date.getDay()
+/* ============================================================
+ * Imagen semanal — armada como SVG (texto plano) y convertida a PNG vía
+ * Google Drive. Reemplaza un intento anterior con Google Slides: la
+ * diapositiva recién creada tardaba en quedar lista del lado del servidor
+ * y la exportación salía en blanco de forma consistente, sin que esperar
+ * más ayudara. SVG es solo texto — no depende de que ningún servicio
+ * "termine de aplicar" cambios — y Drive genera la miniatura PNG de
+ * cualquier archivo que soporte previsualizar, SVG incluido.
+ * ============================================================ */
 
-/** "Pan a gusto con algo para untar (mermelada...)" -> "Pan a gusto con algo para untar" — igual que shortMeal() en app.js. */
-function shortMealEs(text) {
-  return String(text || "").split(" (")[0].trim();
+const WEEKLY_SVG_WIDTH = 380;
+const WEEKLY_SVG_MARGIN = 20;
+const WEEKLY_SVG_COLS = 5;
+const WEEKLY_SVG_COL_W = (WEEKLY_SVG_WIDTH - WEEKLY_SVG_MARGIN * 2) / WEEKLY_SVG_COLS;
+const WEEKLY_SVG_TABLE_TOP = 90;
+const WEEKLY_SVG_DAY_H = 50;
+
+function xmlEscape(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
-/**
- * Exporta una diapositiva a PNG, reintentando si sale en blanco. SlidesApp
- * no tiene un flush() como SpreadsheetApp: los cambios vía API quedan
- * guardados casi al toque, pero el endpoint de exportación puede tardar en
- * reflejarlos — cuánto, depende de cuánto se editó (una tabla con 14 celdas
- * tarda más que un par de cajas de texto). Una imagen en blanco (fondo
- * sólido) pesa unos pocos KB; con contenido real pesa bastante más — se usa
- * eso para decidir si hay que esperar más y reintentar, en vez de adivinar
- * un número de segundos fijo.
- */
-/**
- * Antes de exportar, confirma vía la API (Slides.Presentations.Pages.get,
- * una consulta liviana) que la diapositiva REALMENTE tiene los elementos
- * insertados — no basta con que SlidesApp no haya tirado error al
- * insertarlos. Confirmado con una diapositiva recién creada: 4 intentos de
- * exportar con esperas crecientes (hasta ~15s en total) dieron el
- * *mismo* tamaño en blanco cada vez, es decir, el contenido nunca llegó a
- * existir del lado del servidor a tiempo — no era cosa de esperar un poco
- * más el export, sino de que la diapositiva misma (recién creada) tarda en
- * quedar lista para que cualquier lectura posterior (API o export) la vea.
- */
-function waitForSlideElements(presentationId, pageId, expectedCount) {
-  for (let attempt = 1; attempt <= 6; attempt++) {
-    const page = Slides.Presentations.Pages.get(presentationId, pageId);
-    const count = (page.pageElements || []).length;
-    console.log("Verificar contenido de la diapositiva, intento " + attempt + ": " + count + " elementos (se esperan " + expectedCount + ").");
-    if (count >= expectedCount) return true;
-    Utilities.sleep(attempt * 2000);
-  }
-  return false;
+/** Estimación real de cuántos caracteres caben (ancho / tamaño de fuente), en vez de una constante a ciegas. */
+function charsPerLine(widthPx, fontSizePx, ratio) {
+  return Math.max(4, Math.floor(widthPx / (fontSizePx * (ratio || 0.52))));
 }
 
-function fetchSlideExportPng(deck, slide) {
-  const pageId = slide.getObjectId();
-  const exportUrl = "https://docs.google.com/presentation/d/" + deck.getId() + "/export/png?id=" + deck.getId() + "&pageid=" + pageId;
-  const headers = { Authorization: "Bearer " + ScriptApp.getOAuthToken() };
-  const minBytes = 10000;
-
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    Utilities.sleep(attempt * 2000);
-    const res = UrlFetchApp.fetch(exportUrl, { headers: headers, muteHttpExceptions: true });
-    if (res.getResponseCode() !== 200) {
-      throw new Error("No se pudo exportar la imagen de Slides: " + res.getResponseCode());
-    }
-    const blob = res.getBlob();
-    const size = blob.getBytes().length;
-    console.log("Exportar imagen semanal, intento " + attempt + ": " + size + " bytes.");
-    if (size >= minBytes) return blob;
-  }
-  throw new Error("La imagen exportada seguía pareciendo en blanco después de varios intentos.");
-}
-
-/**
- * Genera una imagen — una grilla de 7 días parecida al calendario del
- * sitio, pero solo de la semana correspondiente — con Google Slides, que es
- * lo único con lo que Apps Script puede "dibujar" algo sin depender de un
- * servicio externo pago (no hay Canvas/DOM en Apps Script). Exporta la
- * diapositiva como PNG y la sube al repo; devuelve la URL pública
- * (raw.githubusercontent.com, no la de Pages — se actualiza al toque con el
- * commit en vez de esperar el build/deploy de Pages).
- */
-function buildWeeklyImageUrl(cfg, closures, index, monday, eventEntries, primerDiaSemana) {
-  const deck = getOrCreateWeeklyDeck();
-  const slide = deck.getSlides()[0];
-  slide.getPageElements().forEach(function (el) { el.remove(); });
-  slide.getBackground().setSolidFill("#F3F6F1");
-
-  const W = deck.getPageWidth();
-  const margin = 24;
-
-  const title = slide.insertTextBox(
-    "Colación compartida\nSemana del " + primerDiaSemana,
-    margin, 24, W - margin * 2, 62
-  );
-  title.getText().getTextStyle()
-    .setFontFamily("Arial").setForegroundColor("#262F29").setBold(true).setFontSize(20);
-  title.getText().getParagraphs()[1].getRange().getTextStyle().setFontSize(14).setBold(false);
-
-  // Grilla de 7 columnas (lunes a domingo), 2 filas: encabezado + día.
-  const tableTop = 100;
-  const tableHeight = 150;
-  const table = slide.insertTable(2, 7, margin, tableTop, W - margin * 2, tableHeight);
-
-  for (let col = 0; col < 7; col++) {
-    const d = addDays(monday, col);
-    const iso = toISO(d);
-    const nativeDow = d.getDay();
-    const isWeekend = nativeDow === 0 || nativeDow === 6;
-    const meal = cfg.weekdays[String(nativeDow)];
-
-    const headerCell = table.getCell(0, col);
-    headerCell.getFill().setSolidFill(isWeekend ? "#EDEFEA" : "#E4F2EE");
-    const headerText = headerCell.getText();
-    const dowLabel = DOW_SHORT_ES[nativeDow];
-    const mealLabel = meal ? shortMealEs(meal) : "";
-    headerText.setText(dowLabel + (mealLabel ? "\n" + mealLabel : ""));
-    headerText.getTextStyle().setFontFamily("Arial").setFontSize(7);
-    headerText.getRange(0, dowLabel.length).getTextStyle()
-      .setBold(true).setFontSize(9).setForegroundColor(isWeekend ? "#5C6860" : "#0F5347");
-    if (mealLabel) {
-      headerText.getRange(dowLabel.length + 1, headerText.asString().length).getTextStyle()
-        .setForegroundColor("#5C6860");
-    }
-
-    const dayCell = table.getCell(1, col);
-    const entry = index[iso];
-    const closure = closures[iso];
-    let sub = "";
-    let subColor = "#262F29";
-    let subBold = true;
-    let fill = isWeekend ? "#F8F9F6" : "#FFFFFF";
-    if (entry) {
-      sub = entry.kid;
-    } else if (closure) {
-      sub = (closure.type === "sinColacion" ? "Sin colación" : (closure.reason || "Sin clases"));
-      subColor = closure.type === "sinColacion" ? "#E8730C" : "#B3261E";
-      fill = closure.type === "sinColacion" ? "#FCEADB" : "#FBE4E2";
-    }
-    dayCell.getFill().setSolidFill(fill);
-    const dayText = dayCell.getText();
-    const dayNum = String(d.getDate());
-    dayText.setText(dayNum + (sub ? "\n" + sub : ""));
-    dayText.getTextStyle().setFontFamily("Arial").setFontSize(8);
-    dayText.getRange(0, dayNum.length).getTextStyle().setForegroundColor("#5C6860");
-    if (sub) {
-      dayText.getRange(dayNum.length + 1, dayText.asString().length).getTextStyle()
-        .setBold(subBold).setForegroundColor(subColor);
-    }
-  }
-
-  // Novedades de la semana, debajo de la tabla.
-  const body = slide.insertTextBox("", margin, tableTop + tableHeight + 20, W - margin * 2, WEEKLY_IMAGE_HEIGHT - tableTop - tableHeight - 44);
-  const textRange = body.getText();
-  let cursor = 0;
-  if (eventEntries && eventEntries.length) {
-    const header = "📌 Novedades de la semana\n";
-    textRange.insertText(cursor, header);
-    textRange.getRange(cursor, cursor + header.length).getTextStyle().setBold(true);
-    cursor += header.length;
-    eventEntries.forEach(function (e) {
-      const plain = e.line.replace(/^- /, "") + "\n";
-      textRange.insertText(cursor, plain);
-      cursor += plain.length;
-    });
-  }
-  body.getText().getTextStyle().setFontFamily("Arial").setFontSize(13).setForegroundColor("#262F29");
-
-  // title + table + body = 3 elementos en la diapositiva.
-  const ready = waitForSlideElements(deck.getId(), slide.getObjectId(), 3);
-  if (!ready) {
-    console.error("La diapositiva no reflejó los cambios a tiempo (se exporta igual, puede salir en blanco).");
-  }
-
-  const blob = fetchSlideExportPng(deck, slide);
-  putBinaryFile(WEEKLY_IMAGE_PATH, blob, "Actualizar imagen semanal de " + cfg.curso);
-  return RAW_BASE_URL + WEEKLY_IMAGE_PATH + "?v=" + new Date().getTime();
-}
-
-/**
- * La imagen semanal se redibuja cada vez sobre la MISMA diapositiva (no se
- * crea una presentación nueva cada semana) — el id queda guardado en Script
- * Properties. Se crea en formato retrato (600x820pt) usando el servicio
- * avanzado "Slides API" (hay que activarlo: en el editor de Apps Script,
- * ícono "+" junto a "Services" → Slides API → Add). SlidesApp.create() no
- * permite elegir el tamaño — siempre crea horizontal — así que la primera
- * creación pasa por Slides.Presentations.create() en vez de SlidesApp.
- */
-function getOrCreateWeeklyDeck() {
-  const props = PropertiesService.getScriptProperties();
-  const id = props.getProperty("WEEKLY_SLIDE_ID");
-  if (id) {
-    try {
-      const existing = SlidesApp.openById(id);
-      if (existing.getPageWidth() === WEEKLY_IMAGE_WIDTH && existing.getPageHeight() === WEEKLY_IMAGE_HEIGHT) {
-        return existing;
-      }
-      console.log("La presentación guardada tiene otro tamaño (quedó de una versión anterior en horizontal), se crea una nueva en retrato.");
-    } catch (err) {
-      console.error("No se pudo abrir la presentación guardada (" + id + "), se crea una nueva: " + err);
-    }
-  }
-  const created = Slides.Presentations.create({
-    title: "Colación — imagen semanal (uso interno, no borrar)",
-    pageSize: {
-      width: { magnitude: WEEKLY_IMAGE_WIDTH, unit: "PT" },
-      height: { magnitude: WEEKLY_IMAGE_HEIGHT, unit: "PT" }
+function wrapTextSvg(text, maxChars, maxLines) {
+  const words = String(text || "").split(/\s+/).filter(function (w) { return w; });
+  const lines = [];
+  let cur = "";
+  words.forEach(function (w) {
+    const trial = (cur + " " + w).trim();
+    if (trial.length <= maxChars) {
+      cur = trial;
+    } else {
+      if (cur) lines.push(cur);
+      cur = w;
     }
   });
-  props.setProperty("WEEKLY_SLIDE_ID", created.presentationId);
-  return SlidesApp.openById(created.presentationId);
+  if (cur) lines.push(cur);
+  if (maxLines && lines.length > maxLines) {
+    lines.length = maxLines;
+    let last = lines[maxLines - 1];
+    while (last.length > maxChars - 1 && last.length > 0) last = last.slice(0, -1);
+    lines[maxLines - 1] = last.replace(/\s+$/, "") + "…";
+  }
+  return lines;
+}
+
+function tspansSvg(lines, x, firstDy, lineHeight) {
+  return lines.map(function (line, i) {
+    return '<tspan x="' + x + '" dy="' + (i === 0 ? firstDy : lineHeight) + '">' + xmlEscape(line) + '</tspan>';
+  }).join("");
+}
+
+/**
+ * days: 5 objetos lunes..viernes { date, dow, meal, kid, closureText, closureKind }
+ * events: [{ dowFull, day, monthAbr, time, title, audience, note }]
+ */
+function buildWeeklySvgMarkup(cursoAlias, mondayLabel, days, events) {
+  const W = WEEKLY_SVG_WIDTH, MARGIN = WEEKLY_SVG_MARGIN, COL_W = WEEKLY_SVG_COL_W;
+  const PAPER = "#F3F6F1", INK = "#262F29", INK_SOFT = "#5C6860";
+  const TEAL = "#1C8E79", TEAL_DEEP = "#0F5347", TEAL_TINT = "#E4F2EE";
+  const RED = "#B3261E", RED_TINT = "#FBE4E2", MANDARIN = "#E8730C", MANDARIN_TINT = "#FCEADB";
+  const LINE_C = "#DDE5DA", WHITE = "#FFFFFF";
+  const DOW_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
+  const SUB_FONT_SIZE = 10.5; // el nombre más largo esperado (10 caracteres, ej. "Clemente A") debe caber en una línea
+
+  const colInnerW = COL_W - 12; // 6px de padding a cada lado
+  const mealCharBudget = charsPerLine(colInnerW, 7.5);
+  const subCharBudget = charsPerLine(colInnerW, SUB_FONT_SIZE);
+  const mealLinesByCol = days.map(function (d) { return d.meal ? wrapTextSvg(d.meal, mealCharBudget) : []; });
+  const maxMealLines = mealLinesByCol.reduce(function (m, l) { return Math.max(m, l.length); }, 0);
+  const headerH = 22 + maxMealLines * 11 + 8;
+
+  let cursorY = WEEKLY_SVG_TABLE_TOP;
+  const gridSvg = [];
+  days.forEach(function (d, col) {
+    const x = MARGIN + col * COL_W;
+    gridSvg.push('<rect x="' + x.toFixed(2) + '" y="' + cursorY + '" width="' + COL_W.toFixed(2) + '" height="' + headerH + '" fill="' + TEAL_TINT + '" stroke="' + LINE_C + '" stroke-width="1"/>');
+    const tx = x + 6;
+    gridSvg.push('<text x="' + tx.toFixed(2) + '" y="' + (cursorY + 14) + '" font-size="9.5" font-weight="700" fill="' + TEAL_DEEP + '">' + xmlEscape(DOW_SHORT[d.dow]) + '</text>');
+    if (mealLinesByCol[col].length) {
+      gridSvg.push('<text x="' + tx.toFixed(2) + '" y="' + (cursorY + 27) + '" font-size="7.5" fill="' + INK_SOFT + '">' + tspansSvg(mealLinesByCol[col], tx.toFixed(2), 0, 11) + '</text>');
+    }
+
+    const y2 = cursorY + headerH;
+    let fill = WHITE, subColor = INK, subText = "";
+    if (d.kid) {
+      subText = d.kid;
+    } else if (d.closureText) {
+      subText = d.closureText;
+      if (d.closureKind === "sinColacion") { subColor = MANDARIN; fill = MANDARIN_TINT; }
+      else { subColor = RED; fill = RED_TINT; }
+    }
+    gridSvg.push('<rect x="' + x.toFixed(2) + '" y="' + y2 + '" width="' + COL_W.toFixed(2) + '" height="' + WEEKLY_SVG_DAY_H + '" fill="' + fill + '" stroke="' + LINE_C + '" stroke-width="1"/>');
+    gridSvg.push('<text x="' + tx.toFixed(2) + '" y="' + (y2 + 15) + '" font-size="9.5" fill="' + INK_SOFT + '">' + d.date + '</text>');
+    if (subText) {
+      const subLines = wrapTextSvg(subText, subCharBudget, 2);
+      gridSvg.push('<text x="' + tx.toFixed(2) + '" y="' + (y2 + 31) + '" font-size="' + SUB_FONT_SIZE + '" font-weight="700" fill="' + subColor + '">' + tspansSvg(subLines, tx.toFixed(2), 0, 11) + '</text>');
+    }
+  });
+  cursorY += headerH + WEEKLY_SVG_DAY_H + 40;
+
+  const cardW = W - MARGIN * 2;
+  const cardInnerPad = 10;
+  const cardTextW = cardW - (cardInnerPad + 6) - cardInnerPad;
+  const eventCardsSvg = [];
+  (events || []).forEach(function (ev) {
+    const headerText = "🗓️ " + ev.dowFull + " " + (ev.day < 10 ? "0" + ev.day : ev.day) + "-" + ev.monthAbr + (ev.time ? " " + ev.time : "");
+    const titleText = ev.title + (ev.audience ? " " + ev.audience : "");
+    const titleLines = wrapTextSvg(titleText, charsPerLine(cardTextW, 12, 0.56));
+    const noteLines = ev.note ? wrapTextSvg(ev.note, charsPerLine(cardTextW, 11)) : [];
+
+    let y = cardInnerPad;
+    const linesSvg = [];
+    linesSvg.push('<text x="0" y="' + (y + 9) + '" font-size="9" fill="' + TEAL_DEEP + '" opacity="0.85">' + xmlEscape(headerText) + '</text>');
+    y += 17;
+    linesSvg.push('<text x="0" y="' + y + '" font-size="12" font-weight="700" fill="' + TEAL_DEEP + '">' + tspansSvg(titleLines, 0, 10, 15) + '</text>');
+    y += 4 + 15 * (titleLines.length - 1);
+    y += 18;
+    if (noteLines.length) {
+      linesSvg.push('<text x="0" y="' + y + '" font-size="11" fill="' + TEAL_DEEP + '" opacity="0.8">' + tspansSvg(noteLines, 0, 10, 15) + '</text>');
+      y += 4 + 15 * noteLines.length;
+    }
+    const cardH = y + cardInnerPad - 6;
+
+    eventCardsSvg.push('<g transform="translate(' + MARGIN + ',' + cursorY + ')">');
+    eventCardsSvg.push('<rect x="0" y="0" width="' + cardW + '" height="' + cardH + '" rx="8" fill="' + TEAL_TINT + '"/>');
+    eventCardsSvg.push('<rect x="0" y="0" width="3" height="' + cardH + '" fill="' + TEAL + '"/>');
+    eventCardsSvg.push('<g transform="translate(' + (cardInnerPad + 6) + ',0)">' + linesSvg.join("") + '</g>');
+    eventCardsSvg.push('</g>');
+    cursorY += cardH + 10;
+  });
+
+  const height = Math.round(cursorY + MARGIN - 10);
+
+  const parts = [];
+  parts.push('<svg viewBox="0 0 ' + W + ' ' + height + '" xmlns="http://www.w3.org/2000/svg" font-family="Arial, sans-serif">');
+  parts.push('<rect x="0" y="0" width="' + W + '" height="' + height + '" fill="' + PAPER + '"/>');
+  parts.push('<text x="' + MARGIN + '" y="34" font-size="19" font-weight="700" fill="' + INK + '">' + xmlEscape("Colación Compartida - " + cursoAlias) + '</text>');
+  parts.push('<text x="' + MARGIN + '" y="54" font-size="13" fill="' + INK + '">' + xmlEscape("Semana del " + mondayLabel) + '</text>');
+  parts.push.apply(parts, gridSvg);
+  if (events && events.length) {
+    parts.push('<text x="' + MARGIN + '" y="' + (WEEKLY_SVG_TABLE_TOP + headerH + WEEKLY_SVG_DAY_H + 32) + '" font-size="12.5" font-weight="700" fill="' + INK + '">📌 Novedades de la semana</text>');
+  }
+  parts.push.apply(parts, eventCardsSvg);
+  parts.push('</svg>');
+  return parts.join("\n");
+}
+
+/**
+ * Sube el SVG a Drive (se borra apenas se saca la miniatura) y pide su
+ * miniatura PNG — Drive genera automáticamente una previsualización para
+ * los tipos de archivo que sabe mostrar, SVG incluido. La miniatura no
+ * siempre está lista al toque de subir el archivo, así que se reintenta
+ * unas cuantas veces antes de rendirse.
+ */
+function svgToPngViaDrive(svgText, fileName) {
+  const blob = Utilities.newBlob(svgText, "image/svg+xml", fileName);
+  const file = DriveApp.createFile(blob);
+  try {
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      const thumb = file.getThumbnail();
+      if (thumb) {
+        console.log("Miniatura de la imagen semanal lista en el intento " + attempt + " (" + thumb.getBytes().length + " bytes).");
+        return thumb;
+      }
+      console.log("Miniatura de la imagen semanal aún no está lista, intento " + attempt + ".");
+      Utilities.sleep(attempt * 1500);
+    }
+    throw new Error("Drive no generó la miniatura de la imagen semanal a tiempo.");
+  } finally {
+    file.setTrashed(true);
+  }
+}
+
+/**
+ * Arma la imagen semanal (SVG → PNG vía Drive) y la sube al repo; devuelve
+ * la URL pública (raw.githubusercontent.com, no la de Pages — se actualiza
+ * al toque con el commit en vez de esperar el build/deploy de Pages).
+ */
+function buildWeeklyImageUrl(curso, cursoAlias, primerDiaSemana, imageDays, eventEntries) {
+  const svg = buildWeeklySvgMarkup(cursoAlias, primerDiaSemana, imageDays, eventEntries);
+  const png = svgToPngViaDrive(svg, "colacion-semanal-" + cursoAlias + ".svg");
+  putBinaryFile(WEEKLY_IMAGE_PATH, png, "Actualizar imagen semanal de " + curso);
+  return RAW_BASE_URL + WEEKLY_IMAGE_PATH + "?v=" + new Date().getTime();
 }
 
 function runWeeklyReminder(conf) {

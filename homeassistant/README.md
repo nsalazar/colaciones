@@ -122,40 +122,44 @@ de esa semana — además del texto, que queda como pie de foto (`caption`).
 
 La imagen no se genera en el navegador (el "Compartir imagen" del sitio usa
 `html2canvas`, que no existe en Apps Script): se genera **del lado del
-servidor**, con Google Slides — es lo único con lo que Apps Script puede
-"dibujar" algo sin depender de un servicio externo pago:
+servidor**, armando un **SVG como texto plano** y convirtiéndolo a PNG con
+Google Drive:
 
-1. `buildWeeklyImageUrl()` en `Code.gs` redibuja siempre la **misma**
-   diapositiva (una presentación en retrato de 600x820pt llamada "Colación
-   — imagen semanal (uso interno, no borrar)", creada la primera vez y
-   guardada por su id en Script Properties — no crea una nueva cada
-   semana). El tamaño retrato se pide con el servicio avanzado "Slides API"
-   (`Slides.Presentations.create({..., pageSize: {...}})`) porque
-   `SlidesApp.create()` siempre crea horizontal y no permite cambiarlo
-   después — hay que **activar ese servicio una vez** en el editor de Apps
-   Script: ícono **"+"** junto a "Services" (columna izquierda) → **Slides
-   API** → Add.
-2. La exporta como PNG (`.../export/png`, autenticado con
-   `ScriptApp.getOAuthToken()`) y la sube al repo en
-   `data/<curso>/weekly-preview.png` (mismo mecanismo que ya usa `publish()`
-   para el JSON).
-3. Manda esa URL a Home Assistant como **raw.githubusercontent.com**, no la
-   de GitHub Pages — Pages hace un build/deploy que puede tardar hasta un
-   par de minutos en reflejar el commit nuevo, mientras que
-   raw.githubusercontent.com sirve el archivo del commit casi al toque. Aun
-   así lleva un `?v=<timestamp>` para evitar que WhatsApp cachee una versión
-   vieja de la imagen entre una semana y la siguiente.
+1. `buildWeeklySvgMarkup()` en `Code.gs` arma el SVG a mano (rects y
+   `<text>`, sin ninguna librería) — una grilla de lunes a viernes parecida
+   al calendario del sitio, más una tarjeta por evento con el mismo formato
+   que "Próximos eventos" (borde de color, fondo tintado, título en
+   negrita). Solo texto, sin depender de ningún servicio externo.
+2. `svgToPngViaDrive()` sube ese SVG a Drive y pide su miniatura
+   (`file.getThumbnail()`) — Drive genera automáticamente una
+   previsualización PNG para los tipos de archivo que sabe mostrar, SVG
+   incluido. El archivo se borra apenas se obtiene la miniatura. La
+   miniatura no siempre está lista al toque de subir el archivo, así que
+   reintenta unas cuantas veces antes de rendirse.
+3. La sube al repo en `data/<curso>/weekly-preview.png` (mismo mecanismo
+   que ya usa `publish()` para el JSON) y manda esa URL a Home Assistant
+   como **raw.githubusercontent.com**, no la de GitHub Pages — Pages hace
+   un build/deploy que puede tardar hasta un par de minutos en reflejar el
+   commit nuevo, mientras que raw.githubusercontent.com sirve el archivo
+   del commit casi al toque. Aun así lleva un `?v=<timestamp>` para evitar
+   que WhatsApp cachee una versión vieja de la imagen entre una semana y la
+   siguiente.
 
-Si la generación o el envío de la imagen fallan por lo que sea (Slides,
-export, o el webhook), el resumen semanal **igual sale como texto plano** —
-la imagen es "mejor si se puede", nunca bloquea el envío. Se puede probar
+*Nota histórica: la primera versión de esto usaba Google Slides (crear una
+diapositiva, dibujar cuadros de texto/tabla, exportarla a PNG). Se
+abandonó: una diapositiva recién creada tardaba en quedar lista del lado
+del servidor y la exportación salía en blanco de forma consistente, sin que
+esperar más ayudara — SVG evita el problema de raíz porque es solo texto,
+no depende de que ningún servicio "termine de aplicar" cambios antes de
+poder leerlo. Si el proyecto tiene el servicio avanzado "Slides API"
+activado de ese intento, ya no hace falta — se puede quitar (ícono **"+"**
+junto a "Services" → buscarlo en la lista → ícono de basurero).*
+
+Si la generación o el envío de la imagen fallan por lo que sea (Drive, la
+miniatura, el webhook), el resumen semanal **igual sale como texto plano**
+— la imagen es "mejor si se puede", nunca bloquea el envío. Se puede probar
 sin esperar al viernes con **Forzar Notificaciones** en el panel: el
 resultado muestra la imagen generada ahí mismo, además de mandarla.
-
-La primera vez que corra `buildWeeklyImageUrl()` (desde el trigger
-automático o desde "Forzar Notificaciones"), Apps Script va a pedir
-autorizar permisos nuevos (Slides) — hay que aceptar el diálogo de
-autorización una vez.
 
 ## Seguridad
 
