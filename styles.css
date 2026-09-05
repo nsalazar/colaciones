@@ -104,6 +104,10 @@ h1 {
   color: #9FCFC1;
 }
 
+.mine-lead strong {
+  color: #EAF5F1;
+}
+
 .mine-meal {
   font-family: "Montserrat", system-ui, sans-serif;
   font-weight: 700;

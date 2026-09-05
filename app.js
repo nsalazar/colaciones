@@ -466,9 +466,17 @@ function renderMine() {
 
   const sameDay = toISO(found.date) === toISO(today);
   const dow = DOW[((found.date.getDay() + 6) % 7) + 1];
-  document.getElementById("mineLead").textContent = sameDay
-    ? `Hoy le toca a ${state.myKid}`
-    : `${state.myKid} lleva la colación el ${dow} ${longDate(found.date)}`;
+  const lead = document.getElementById("mineLead");
+  lead.innerHTML = "";
+  const kidEl = document.createElement("strong");
+  kidEl.textContent = state.myKid;
+  if (sameDay) {
+    lead.append("Hoy le toca a ", kidEl);
+  } else {
+    const dateEl = document.createElement("strong");
+    dateEl.textContent = `${dow} ${longDate(found.date)}`;
+    lead.append(kidEl, " lleva la colación el ", dateEl);
+  }
   document.getElementById("mineMeal").textContent = found.entry.meal;
   box.hidden = false;
 }
