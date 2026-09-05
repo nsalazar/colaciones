@@ -149,13 +149,17 @@ Google Drive:
    miniatura no siempre está lista al toque de subir el archivo, así que
    reintenta unas cuantas veces antes de rendirse.
 3. La sube al repo en `data/<curso>/weekly-preview.png` (mismo mecanismo
-   que ya usa `publish()` para el JSON) y manda esa URL a Home Assistant
-   como **raw.githubusercontent.com**, no la de GitHub Pages — Pages hace
-   un build/deploy que puede tardar hasta un par de minutos en reflejar el
-   commit nuevo, mientras que raw.githubusercontent.com sirve el archivo
-   del commit casi al toque. Aun así lleva un `?v=<timestamp>` para evitar
-   que WhatsApp cachee una versión vieja de la imagen entre una semana y la
-   siguiente.
+   que ya usa `publish()` para el JSON) y manda a Home Assistant la URL
+   raw.githubusercontent.com de **ese commit exacto**
+   (`.../<sha-del-commit>/data/<curso>/weekly-preview.png`), no la de
+   `main` ni la de GitHub Pages. La primera versión de esto usaba
+   `.../main/...?v=<timestamp>` para evitar cachés, pero un cache
+   intermedio (o el propio cliente de WhatsApp) puede ignorar el query
+   string y servir igual una versión vieja del archivo en esa misma ruta
+   — pasó al menos dos veces, con la imagen de una semana distinta a la
+   del texto. Apuntar al SHA del commit lo hace imposible: cada semana
+   quedan en URLs completamente distintas, cada una fija para siempre a
+   ese contenido exacto.
 
 *Nota histórica: la primera versión de esto usaba Google Slides (crear una
 diapositiva, dibujar cuadros de texto/tabla, exportarla a PNG). Se

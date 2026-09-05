@@ -236,6 +236,7 @@ function githubRequest(method, path, payload) {
   return { code: res.getResponseCode(), body: res.getContentText() };
 }
 
+/** Devuelve el SHA del commit recién creado — sirve para armar una URL raw.githubusercontent.com que apunte a esa versión exacta del archivo, en vez de a "main" (que puede cambiar, y que algún cache intermedio podría servir desactualizado). */
 function putContentBytes(path, bytes, message) {
   const getRes = githubRequest("get", path);
   let sha;
@@ -248,15 +249,16 @@ function putContentBytes(path, bytes, message) {
   if (putRes.code !== 200 && putRes.code !== 201) {
     throw new Error("Error publicando " + path + ": " + putRes.code + " " + putRes.body);
   }
+  return JSON.parse(putRes.body).commit.sha;
 }
 
 function putFile(path, jsonObj, message) {
   putContentBytes(path, Utilities.newBlob(JSON.stringify(jsonObj, null, 2) + "\n").getBytes(), message);
 }
 
-/** Sube un archivo binario (ej. una imagen) al repo. */
+/** Sube un archivo binario (ej. una imagen) al repo; devuelve el SHA del commit. */
 function putBinaryFile(path, blob, message) {
-  putContentBytes(path, blob.getBytes(), message);
+  return putContentBytes(path, blob.getBytes(), message);
 }
 
 /**
@@ -1262,14 +1264,17 @@ function svgToPngViaDrive(svgText, fileName) {
 
 /**
  * Arma la imagen semanal (SVG → PNG vía Drive) y la sube al repo; devuelve
- * la URL pública (raw.githubusercontent.com, no la de Pages — se actualiza
- * al toque con el commit en vez de esperar el build/deploy de Pages).
+ * la URL pública apuntando al SHA del commit recién creado (no a "main")
+ * para que sea inmutable: cada semana queda en una URL distinta y para
+ * siempre fija a ese contenido exacto, así que ningún cache (CDN, el
+ * cliente de WhatsApp, lo que sea) puede servir la imagen de otra semana
+ * bajo esa misma URL — ya pasó con "main" + "?v=timestamp".
  */
 function buildWeeklyImageUrl(curso, cursoAlias, primerDiaSemana, imageDays, eventEntries) {
   const svg = buildWeeklySvgMarkup(cursoAlias, primerDiaSemana, imageDays, eventEntries);
   const png = svgToPngViaDrive(svg, "colacion-semanal-" + cursoAlias + ".svg");
-  putBinaryFile(WEEKLY_IMAGE_PATH, png, "Actualizar imagen semanal de " + curso);
-  return RAW_BASE_URL + WEEKLY_IMAGE_PATH + "?v=" + new Date().getTime();
+  const commitSha = putBinaryFile(WEEKLY_IMAGE_PATH, png, "Actualizar imagen semanal de " + curso);
+  return "https://raw.githubusercontent.com/" + REPO + "/" + commitSha + "/" + WEEKLY_IMAGE_PATH;
 }
 
 function runWeeklyReminder(conf) {
