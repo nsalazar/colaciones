@@ -950,7 +950,8 @@ function runDailyReminder(conf) {
 
 function thisMonday(from) {
   const shift = (from.getDay() + 6) % 7; // días desde el lunes de ESTA semana
-  return addDays(from, -shift);
+  const d = addDays(from, -shift);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()); // a medianoche: "from" trae la hora actual, y de lo contrario un evento fechado justo el lunes queda excluido (medianoche del lunes < lunes-con-hora-actual)
 }
 
 function nextMonday(from) {
