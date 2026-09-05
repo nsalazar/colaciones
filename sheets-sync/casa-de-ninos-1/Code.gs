@@ -1180,7 +1180,7 @@ function buildWeeklySvgMarkup(cursoAlias, mondayLabel, days, events) {
   const cardTextW = cardW - (cardInnerPad + 6) - cardInnerPad;
   const eventCardsSvg = [];
   (events || []).forEach(function (ev) {
-    const headerText = "🗓️ " + ev.dowFull + " " + (ev.day < 10 ? "0" + ev.day : ev.day) + "-" + ev.monthAbr + (ev.time ? " " + ev.time : "");
+    const headerText = ev.dowFull + " " + (ev.day < 10 ? "0" + ev.day : ev.day) + "-" + ev.monthAbr + (ev.time ? " " + ev.time : "");
     const titleText = ev.title + (ev.audience ? " " + ev.audience : "");
     const titleLines = wrapTextSvg(titleText, charsPerLine(cardTextW, 12, 0.56));
     const noteLines = ev.note ? wrapTextSvg(ev.note, charsPerLine(cardTextW, 11)) : [];
@@ -1215,7 +1215,7 @@ function buildWeeklySvgMarkup(cursoAlias, mondayLabel, days, events) {
   parts.push('<text x="' + MARGIN + '" y="54" font-size="13" fill="' + INK + '">' + xmlEscape("Semana del " + mondayLabel) + '</text>');
   parts.push.apply(parts, gridSvg);
   if (events && events.length) {
-    parts.push('<text x="' + MARGIN + '" y="' + (WEEKLY_SVG_TABLE_TOP + headerH + WEEKLY_SVG_DAY_H + 32) + '" font-size="12.5" font-weight="700" fill="' + INK + '">📌 Novedades de la semana</text>');
+    parts.push('<text x="' + MARGIN + '" y="' + (WEEKLY_SVG_TABLE_TOP + headerH + WEEKLY_SVG_DAY_H + 32) + '" font-size="12.5" font-weight="700" fill="' + INK + '">Novedades de la semana</text>');
   }
   parts.push.apply(parts, eventCardsSvg);
   parts.push('</svg>');
