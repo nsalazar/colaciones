@@ -30,6 +30,8 @@ trae `url`, o como texto (`send_message`) si no:
 
 ```yaml
 alias: Huelquen - Whatsapp Colación Webhook
+mode: queued
+max: 10
 triggers:
   - webhook_id: TU_WEBHOOK_ID_AQUI
     allowed_methods: [POST]
@@ -55,6 +57,16 @@ actions:
 
 Puntos importantes:
 
+- `mode: queued` es necesario porque el recordatorio diario le manda un
+  mensaje a **cada apoderado** del niño/a (Apoderado 1 y Apoderado 2, si
+  ambos tienen teléfono) — eso son dos llamadas al webhook, una justo
+  después de la otra. El modo por defecto de una automatización en Home
+  Assistant es `single`: si el webhook se vuelve a disparar mientras la
+  ejecución anterior todavía está corriendo (el `send_message` a WhatsApp
+  Web puede tardar unos segundos), el segundo disparo se **descarta en
+  silencio** — así se pierde el mensaje al segundo apoderado sin ningún
+  error visible. `queued` hace que ese segundo disparo espere su turno en
+  vez de perderse.
 - `local_only: false` es necesario para que el webhook responda cuando
   llega desde fuera de la red local (Apps Script corre en los servidores de
   Google, no en tu LAN).

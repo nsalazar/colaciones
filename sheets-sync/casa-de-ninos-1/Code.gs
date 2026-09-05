@@ -1012,16 +1012,25 @@ function buildWeeklyMessageAndSend(conf, monday) {
     });
     if (inWeekDates.length) {
       const firstIso = inWeekDates[0];
+      const lastIso = inWeekDates[inWeekDates.length - 1];
       const first = parseDateLocal(firstIso);
+      const last = parseDateLocal(lastIso);
+      const isRange = lastIso !== firstIso;
+      const fechaLabel = isRange
+        ? novedadFechaEs(first) + " al " + novedadFechaEs(last)
+        : novedadFechaEs(first);
       const audience = e.audience && e.audience !== "todos"
         ? (Array.isArray(e.audience) ? e.audience.join(", ") : e.audience)
         : "";
       eventEntries.push({
         date: firstIso,
-        line: "- [" + novedadFechaEs(first) + "] " + e.title + (e.time ? " (" + e.time + ")" : ""),
+        line: "- [" + fechaLabel + "] " + e.title + (e.time ? " (" + e.time + ")" : ""),
         dowFull: DOW_ES[first.getDay()],
         day: first.getDate(),
         monthAbr: MESES_ES[first.getMonth()].charAt(0).toUpperCase() + MESES_ES[first.getMonth()].slice(1, 3),
+        dowFullEnd: isRange ? DOW_ES[last.getDay()] : "",
+        dayEnd: isRange ? last.getDate() : null,
+        monthAbrEnd: isRange ? MESES_ES[last.getMonth()].charAt(0).toUpperCase() + MESES_ES[last.getMonth()].slice(1, 3) : "",
         time: e.time || "",
         title: e.title || "",
         audience: audience,
@@ -1180,7 +1189,10 @@ function buildWeeklySvgMarkup(cursoAlias, mondayLabel, days, events) {
   const cardTextW = cardW - (cardInnerPad + 6) - cardInnerPad;
   const eventCardsSvg = [];
   (events || []).forEach(function (ev) {
-    const headerText = ev.dowFull + " " + (ev.day < 10 ? "0" + ev.day : ev.day) + "-" + ev.monthAbr + (ev.time ? " " + ev.time : "");
+    const dayPad = function (n) { return n < 10 ? "0" + n : String(n); };
+    let headerText = ev.dowFull + " " + dayPad(ev.day) + "-" + ev.monthAbr;
+    if (ev.dayEnd) headerText += " al " + ev.dowFullEnd + " " + dayPad(ev.dayEnd) + "-" + ev.monthAbrEnd;
+    if (ev.time) headerText += " " + ev.time;
     const titleText = ev.title + (ev.audience ? " " + ev.audience : "");
     const titleLines = wrapTextSvg(titleText, charsPerLine(cardTextW, 12, 0.56));
     const noteLines = ev.note ? wrapTextSvg(ev.note, charsPerLine(cardTextW, 11)) : [];
