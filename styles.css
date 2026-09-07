@@ -437,6 +437,20 @@ h1 {
   padding: 0;
 }
 
+.month-subtitle {
+  font-family: "Montserrat", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--ink-soft);
+  margin: 1.1rem 0 .5rem;
+}
+
+.month-subtitle:first-child {
+  margin-top: 0;
+}
+
 .event {
   margin: 0 0 .5rem;
   padding: .5rem .65rem;

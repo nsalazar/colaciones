@@ -66,6 +66,13 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+function monthSubtitle(d) {
+  const li = document.createElement("li");
+  li.className = "month-subtitle";
+  li.textContent = capitalize(`${MONTHS[d.getMonth()]} ${d.getFullYear()}`);
+  return li;
+}
+
 /* ---------- rotation ---------- */
 
 function expandClosures(list) {
@@ -421,7 +428,14 @@ function renderUpcomingEvents() {
 
   if (!items.length) { box.hidden = true; return; }
 
+  let lastMonthKey = null;
   for (const { start, end, ev } of items) {
+    const monthKey = `${start.getFullYear()}-${start.getMonth()}`;
+    if (monthKey !== lastMonthKey) {
+      ul.append(monthSubtitle(start));
+      lastMonthKey = monthKey;
+    }
+
     const li = document.createElement("li");
     li.className = "event";
 
@@ -493,11 +507,18 @@ function renderAvisos() {
 
   if (!items.length) { box.hidden = true; return; }
 
+  let lastMonthKey = null;
   for (const a of items) {
+    const d = parseDate(a.date);
+    const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
+    if (monthKey !== lastMonthKey) {
+      ul.append(monthSubtitle(d));
+      lastMonthKey = monthKey;
+    }
+
     const li = document.createElement("li");
     li.className = "notice";
 
-    const d = parseDate(a.date);
     const dow = DOW[((d.getDay() + 6) % 7) + 1];
     const header = document.createElement("p");
     header.className = "event-header";
