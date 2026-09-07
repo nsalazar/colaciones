@@ -90,10 +90,29 @@ function getStatus() {
   return { dirty: dirty, curso: curso };
 }
 
+/**
+ * "Service Spreadsheets failed while accessing document..." es un hipo
+ * transitorio de Google (no un bug nuestro) que pasa de vez en cuando,
+ * sobre todo en triggers automáticos — reintentar un par de segundos
+ * después casi siempre basta, así que no vale la pena mandar un correo
+ * de error por algo que se resuelve solo.
+ */
+function withRetry(fn, attempts, label) {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return fn();
+    } catch (err) {
+      if (i === attempts) throw err;
+      console.warn((label || "operación") + ": intento " + i + " falló (" + err + "), reintentando…");
+      Utilities.sleep(i * 1000);
+    }
+  }
+}
+
 function readTable(sheetName) {
   const sheet = SpreadsheetApp.getActive().getSheetByName(sheetName);
   if (!sheet) throw new Error("No existe la pestaña: " + sheetName);
-  const values = sheet.getDataRange().getValues();
+  const values = withRetry(function () { return sheet.getDataRange().getValues(); }, 3, "leer " + sheetName);
   // Row 1 = legend text, Row 2 = blank, Row 3 = header, Row 4+ = data.
   const header = values[2];
   const dataRows = values.slice(3).filter(function (r) {
