@@ -250,10 +250,6 @@ function svgIcon(innerPaths) {
 
 function dayCellContent(d, inMonth, opts = {}) {
   const td = document.createElement("td");
-  if (!inMonth) {
-    td.className = "empty";
-    return td;
-  }
 
   const iso = toISO(d);
   const todayISO = toISO(new Date());
@@ -266,6 +262,7 @@ function dayCellContent(d, inMonth, opts = {}) {
   const dayAvisos = state.avisosByDate.get(iso) || [];
 
   td.className = "cell";
+  if (!inMonth) td.classList.add("outside-month"); // cierra la semana con días del mes siguiente en vez de dejarla vacía
   if (isWeekend) td.classList.add("weekend");
   if (!opts.hideToday && iso === todayISO) td.classList.add("today");
   else if (iso < todayISO) td.classList.add("past");

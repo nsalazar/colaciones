@@ -222,9 +222,8 @@ h1 {
   vertical-align: top;
 }
 
-.cal td.empty {
-  background: #F8F9F6;
-  border-color: var(--line);
+.cell.outside-month {
+  opacity: .5;
 }
 
 .cell.weekend {
