@@ -402,5 +402,10 @@
       "label": "Vestimenta Acto de Fiestas Patrias"
     }
   ],
-  "restrictions": []
+  "restrictions": [
+    {
+      "restriction": "Frambuesa",
+      "kid": "Sofía"
+    }
+  ]
 }
