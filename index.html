@@ -41,6 +41,18 @@
     <p class="mine-meal" id="mineMeal"></p>
   </section>
 
+  <section class="restrictions-banner" id="restrictionsSection" hidden>
+    <p class="restrictions-lead">
+      <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+      Restricciones alimenticias
+    </p>
+    <ul id="restrictions"></ul>
+  </section>
+
   <nav class="monthnav">
     <button type="button" id="prev" class="stepper" aria-label="Mes anterior">‹</button>
     <p class="monthlabel" id="monthlabel"></p>
@@ -93,11 +105,6 @@
   <section class="avisos" id="avisosSection" hidden>
     <h2>Avisos</h2>
     <ul id="avisos"></ul>
-  </section>
-
-  <section class="avisos">
-    <h2>Restricciones alimenticias</h2>
-    <ul id="restrictions"></ul>
   </section>
 
   <p class="err" id="err" hidden></p>

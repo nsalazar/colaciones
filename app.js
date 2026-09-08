@@ -538,21 +538,24 @@ function renderAvisos() {
 }
 
 function renderRestrictions() {
+  const box = document.getElementById("restrictionsSection");
   const ul = document.getElementById("restrictions");
   ul.innerHTML = "";
   const items = state.cfg.restrictions || [];
-  if (!items.length) {
-    ul.innerHTML = `<li class="aviso"><p>No hay restricciones alimenticias registradas.</p></li>`;
-    return;
-  }
+  if (!items.length) { box.hidden = true; return; }
+
   for (const r of items) {
     const li = document.createElement("li");
-    li.className = "aviso";
-    const p = document.createElement("p");
-    p.textContent = r.kid ? `${r.restriction} — ${r.kid}` : r.restriction;
-    li.append(p);
+    if (r.kid) {
+      const kidEl = document.createElement("strong");
+      kidEl.textContent = r.kid;
+      li.append(kidEl, ": " + r.restriction);
+    } else {
+      li.textContent = r.restriction;
+    }
     ul.append(li);
   }
+  box.hidden = false;
 }
 
 function renderPicker() {
@@ -651,6 +654,9 @@ function buildShareSnapshot(anchor) {
   const tbody = document.createElement("tbody");
   fillMonthRows(tbody, anchor, { hideToday: true, hideMine: true });
   table.append(thead, tbody);
+
+  const restrictions = document.getElementById("restrictionsSection");
+  if (!restrictions.hidden) wrap.append(restrictions.cloneNode(true));
 
   wrap.append(nav, table);
 

@@ -117,6 +117,53 @@ h1 {
   margin: .15rem 0 0;
 }
 
+/* ---------- restricciones alimenticias (alergias) ---------- */
+
+.restrictions-banner {
+  background: var(--red);
+  color: #FDEAE8;
+  border-radius: 14px;
+  padding: 1rem 1.15rem;
+  margin-bottom: 1.6rem;
+}
+
+.restrictions-lead {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  margin: 0 0 .5rem;
+  font-family: "Montserrat", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: .82rem;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: #FFFFFF;
+}
+
+.restrictions-lead .btn-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: none;
+}
+
+.restrictions-banner ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.restrictions-banner li {
+  font-family: "Montserrat", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1.3;
+  padding: .35rem 0;
+}
+
+.restrictions-banner li + li {
+  border-top: 1px solid rgba(255, 255, 255, .25);
+}
+
 /* ---------- month nav ---------- */
 
 .monthnav {
