@@ -1254,6 +1254,7 @@ function buildWeeklySvgMarkup(cursoAlias, mondayLabel, days, events, restriction
     y += 18;
     linesSvg.push('<text x="0" y="' + y + '" font-size="11" font-weight="700" fill="' + RED + '">' + tspansSvg(restLines.map(function (l) { return "• " + l; }), 0, 10, 15) + '</text>');
     y += 4 + 15 * (restLines.length - 1);
+    y += 18;
     const cardH = y + cardInnerPad - 6;
 
     restrictionsSvg.push('<g transform="translate(' + MARGIN + ',' + cursorY + ')">');
