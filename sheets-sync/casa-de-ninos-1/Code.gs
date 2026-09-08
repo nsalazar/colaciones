@@ -931,8 +931,26 @@ function sendWhatsappImage(target, imageUrl, caption) {
 
 /* ---------- recordatorio diario (a cada apoderado, directo) ---------- */
 
-/** Arma y envía el recordatorio diario para una fecha objetivo concreta. */
-function buildDailyMessageAndSend(conf, target) {
+/**
+ * Quien trae la colación compartida la prepara para todo el curso, no solo
+ * para su propio hijo/a — por eso este bloque se agrega en AMBOS mensajes
+ * (diario y semanal) con TODAS las restricciones registradas, no solo las
+ * del niño/a de ese día.
+ */
+function buildRestrictionsBlock(restrictions) {
+  if (!restrictions || !restrictions.length) return "";
+  const lines = restrictions.map(function (r) {
+    return "* " + (r.kid ? r.kid + ": " : "") + r.restriction;
+  });
+  return "\n\n⚠️ Restricción Alimenticia ⚠️\n\n" + lines.join("\n");
+}
+
+/**
+ * Arma y envía el recordatorio diario para una fecha objetivo concreta.
+ * `overridePhone`, si viene (solo desde "Forzar Notificaciones"), redirige
+ * el envío a ese único número en vez de a los apoderados reales del niño/a.
+ */
+function buildDailyMessageAndSend(conf, target, overridePhone) {
   const cfg = buildSchedule();
   const closures = expandClosuresMap(cfg.closures);
   const index = buildIndexMap(cfg, closures);
@@ -951,7 +969,12 @@ function buildDailyMessageAndSend(conf, target) {
     dia_semana: DOW_ES[target.getDay()],
     colacion: entry.meal,
     tags: tagsFor(kidContacts)
-  });
+  }) + buildRestrictionsBlock(cfg.restrictions);
+
+  if (overridePhone) {
+    sendWhatsapp(overridePhone + "@s.whatsapp.net", message);
+    return { sent: true, message: message, kid: entry.kid, phones: [overridePhone], overridden: true };
+  }
 
   if (!kidContacts.length) {
     return { sent: false, reason: "'" + entry.kid + "' no tiene contactos cargados en la pestaña Contactos.", message: message };
@@ -977,11 +1000,15 @@ function nextMonday(from) {
   return addDays(thisMonday(from), 7);
 }
 
-/** Arma y envía el resumen semanal para la semana que empieza en `monday`. */
-function buildWeeklyMessageAndSend(conf, monday) {
+/**
+ * Arma y envía el resumen semanal para la semana que empieza en `monday`.
+ * `overridePhone`, si viene (solo desde "Forzar Notificaciones"), redirige
+ * el envío a ese único número en vez de al grupo del curso.
+ */
+function buildWeeklyMessageAndSend(conf, monday, overridePhone) {
   const configMap = readConfigMap();
   const groupId = String(configMap["ID de Grupo WhatsApp"] || "").trim();
-  if (!groupId) {
+  if (!overridePhone && !groupId) {
     return { sent: false, reason: "No hay 'ID de Grupo WhatsApp' configurado en la pestaña Config." };
   }
   const cursoAlias = String(configMap["Alias"] || configMap["Curso"] || "").trim();
@@ -1072,13 +1099,13 @@ function buildWeeklyMessageAndSend(conf, monday) {
     semana: lines.join("\n"),
     novedades: novedades,
     primer_dia_semana: primerDiaSemana
-  });
+  }) + buildRestrictionsBlock(cfg.restrictions);
 
-  const target = groupId + "@g.us";
+  const target = overridePhone ? (overridePhone + "@s.whatsapp.net") : (groupId + "@g.us");
   let imageUrl = null;
   let imageError = null;
   try {
-    imageUrl = buildWeeklyImageUrl(cfg.curso, cursoAlias, primerDiaSemana, imageDays, eventEntries);
+    imageUrl = buildWeeklyImageUrl(cfg.curso, cursoAlias, primerDiaSemana, imageDays, eventEntries, cfg.restrictions);
   } catch (err) {
     imageError = String(err);
     console.error("No se pudo generar/subir la imagen semanal, se manda solo texto: " + err);
@@ -1087,7 +1114,7 @@ function buildWeeklyMessageAndSend(conf, monday) {
   if (imageUrl) {
     try {
       sendWhatsappImage(target, imageUrl, message);
-      return { sent: true, message: message, image: imageUrl };
+      return { sent: true, message: message, image: imageUrl, overridden: !!overridePhone };
     } catch (err) {
       imageError = String(err);
       console.error("No se pudo mandar la imagen semanal, se manda solo texto: " + err);
@@ -1095,7 +1122,7 @@ function buildWeeklyMessageAndSend(conf, monday) {
   }
 
   sendWhatsapp(target, message);
-  return { sent: true, message: message, image: null, imageError: imageError || undefined };
+  return { sent: true, message: message, image: null, imageError: imageError || undefined, overridden: !!overridePhone };
 }
 
 /* ============================================================
@@ -1160,8 +1187,9 @@ function tspansSvg(lines, x, firstDy, lineHeight) {
 /**
  * days: 5 objetos lunes..viernes { date, dow, meal, kid, closureText, closureKind }
  * events: [{ dowFull, day, monthAbr, time, title, audience, note }]
+ * restrictions: [{ restriction, kid }] — todas las del curso, no solo del niño/a de turno
  */
-function buildWeeklySvgMarkup(cursoAlias, mondayLabel, days, events) {
+function buildWeeklySvgMarkup(cursoAlias, mondayLabel, days, events, restrictions) {
   const W = WEEKLY_SVG_WIDTH, MARGIN = WEEKLY_SVG_MARGIN, COL_W = WEEKLY_SVG_COL_W;
   const PAPER = "#F3F6F1", INK = "#262F29", INK_SOFT = "#5C6860";
   const TEAL = "#1C8E79", TEAL_DEEP = "#0F5347", TEAL_TINT = "#E4F2EE";
@@ -1209,6 +1237,39 @@ function buildWeeklySvgMarkup(cursoAlias, mondayLabel, days, events) {
   const cardW = W - MARGIN * 2;
   const cardInnerPad = 10;
   const cardTextW = cardW - (cardInnerPad + 6) - cardInnerPad;
+
+  // Sin emoji acá: la miniatura de Drive no tiene fuente de emoji (mismo problema
+  // que ya sacamos de 🗓️/📌 más abajo) — el rojo fuerte + mayúsculas hacen de aviso.
+  const restrictionsSvg = [];
+  if (restrictions && restrictions.length) {
+    const restLines = [];
+    restrictions.forEach(function (r) {
+      const label = (r.kid ? r.kid + ": " : "") + r.restriction;
+      wrapTextSvg(label, charsPerLine(cardTextW, 11)).forEach(function (l) { restLines.push(l); });
+    });
+
+    let y = cardInnerPad;
+    const linesSvg = [];
+    linesSvg.push('<text x="0" y="' + (y + 9) + '" font-size="10.5" font-weight="700" fill="' + RED + '">RESTRICCIÓN ALIMENTICIA</text>');
+    y += 18;
+    linesSvg.push('<text x="0" y="' + y + '" font-size="11" font-weight="700" fill="' + RED + '">' + tspansSvg(restLines.map(function (l) { return "• " + l; }), 0, 10, 15) + '</text>');
+    y += 4 + 15 * (restLines.length - 1);
+    const cardH = y + cardInnerPad - 6;
+
+    restrictionsSvg.push('<g transform="translate(' + MARGIN + ',' + cursorY + ')">');
+    restrictionsSvg.push('<rect x="0" y="0" width="' + cardW + '" height="' + cardH + '" rx="8" fill="' + RED_TINT + '"/>');
+    restrictionsSvg.push('<rect x="0" y="0" width="3" height="' + cardH + '" fill="' + RED + '"/>');
+    restrictionsSvg.push('<g transform="translate(' + (cardInnerPad + 6) + ',0)">' + linesSvg.join("") + '</g>');
+    restrictionsSvg.push('</g>');
+    cursorY += cardH + 10;
+  }
+
+  let novedadesTitleSvg = "";
+  if (events && events.length) {
+    novedadesTitleSvg = '<text x="' + MARGIN + '" y="' + (cursorY + 9) + '" font-size="12.5" font-weight="700" fill="' + INK + '">Novedades de la semana</text>';
+    cursorY += 26;
+  }
+
   const eventCardsSvg = [];
   (events || []).forEach(function (ev) {
     const dayPad = function (n) { return n < 10 ? "0" + n : String(n); };
@@ -1248,9 +1309,8 @@ function buildWeeklySvgMarkup(cursoAlias, mondayLabel, days, events) {
   parts.push('<text x="' + MARGIN + '" y="34" font-size="19" font-weight="700" fill="' + INK + '">' + xmlEscape("Colación Compartida - " + cursoAlias) + '</text>');
   parts.push('<text x="' + MARGIN + '" y="54" font-size="13" fill="' + INK + '">' + xmlEscape("Semana del " + mondayLabel) + '</text>');
   parts.push.apply(parts, gridSvg);
-  if (events && events.length) {
-    parts.push('<text x="' + MARGIN + '" y="' + (WEEKLY_SVG_TABLE_TOP + headerH + WEEKLY_SVG_DAY_H + 32) + '" font-size="12.5" font-weight="700" fill="' + INK + '">Novedades de la semana</text>');
-  }
+  parts.push.apply(parts, restrictionsSvg);
+  if (novedadesTitleSvg) parts.push(novedadesTitleSvg);
   parts.push.apply(parts, eventCardsSvg);
   parts.push('</svg>');
   return parts.join("\n");
@@ -1290,8 +1350,8 @@ function svgToPngViaDrive(svgText, fileName) {
  * cliente de WhatsApp, lo que sea) puede servir la imagen de otra semana
  * bajo esa misma URL — ya pasó con "main" + "?v=timestamp".
  */
-function buildWeeklyImageUrl(curso, cursoAlias, primerDiaSemana, imageDays, eventEntries) {
-  const svg = buildWeeklySvgMarkup(cursoAlias, primerDiaSemana, imageDays, eventEntries);
+function buildWeeklyImageUrl(curso, cursoAlias, primerDiaSemana, imageDays, eventEntries, restrictions) {
+  const svg = buildWeeklySvgMarkup(cursoAlias, primerDiaSemana, imageDays, eventEntries, restrictions);
   const png = svgToPngViaDrive(svg, "colacion-semanal-" + cursoAlias + ".svg");
   const commitSha = putBinaryFile(WEEKLY_IMAGE_PATH, png, "Actualizar imagen semanal de " + curso);
   return "https://raw.githubusercontent.com/" + REPO + "/" + commitSha + "/" + WEEKLY_IMAGE_PATH;
@@ -1303,18 +1363,24 @@ function runWeeklyReminder(conf) {
 
 /* ---------- pruebas manuales (llamadas desde el panel lateral) ---------- */
 
-function testWeekly(which) {
+function testWeekly(which, overridePhone) {
   const conf = readNotifConfig()["Semanal"];
   if (!conf) throw new Error("Falta la fila 'Semanal' en la pestaña Notificaciones.");
   const monday = which === "this" ? thisMonday(new Date()) : nextMonday(new Date());
-  return buildWeeklyMessageAndSend(conf, monday);
+  return buildWeeklyMessageAndSend(conf, monday, normalizeOverridePhone(overridePhone));
 }
 
-function testDaily(dateStr) {
+function testDaily(dateStr, overridePhone) {
   const conf = readNotifConfig()["Diario"];
   if (!conf) throw new Error("Falta la fila 'Diario' en la pestaña Notificaciones.");
   if (!dateStr) throw new Error("Elige una fecha.");
-  return buildDailyMessageAndSend(conf, parseDateLocal(dateStr));
+  return buildDailyMessageAndSend(conf, parseDateLocal(dateStr), normalizeOverridePhone(overridePhone));
+}
+
+/** "" / null / undefined -> null (sin override); si no, deja solo dígitos. */
+function normalizeOverridePhone(v) {
+  const digits = normalizePhone(v || "");
+  return digits ? digits : null;
 }
 
 /**
