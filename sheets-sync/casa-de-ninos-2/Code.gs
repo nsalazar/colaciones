@@ -942,7 +942,7 @@ function buildRestrictionsBlock(restrictions) {
   const lines = restrictions.map(function (r) {
     return "* " + (r.kid ? r.kid + ": " : "") + r.restriction;
   });
-  return "\n\n⚠️ Restricción Alimenticia ⚠️\n\n" + lines.join("\n");
+  return "\n\n⚠️ Restricción Alimenticia ⚠️\n" + lines.join("\n");
 }
 
 /**
