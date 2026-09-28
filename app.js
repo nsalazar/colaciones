@@ -132,13 +132,30 @@ function expandAvisos(list) {
   return map;
 }
 
+/**
+ * La rotación es circular: en rotationStart parte el niño que sigue en
+ * `kids` al último que llevó colación antes de esa fecha (según history).
+ * Si ese niño ya no está en la lista (ej. se fue del curso), se mira el
+ * anterior en history, y así. Sin history previo, parte kids[0].
+ */
+function firstTurn(cfg) {
+  const prev = (cfg.history || [])
+    .filter((h) => h.date < cfg.rotationStart)
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  for (const h of prev) {
+    const i = cfg.kids.indexOf(h.kid);
+    if (i >= 0) return i + 1;
+  }
+  return 0;
+}
+
 function buildIndex(cfg, closures) {
   const map = new Map();
 
   if (cfg.kids && cfg.kids.length) {
     let cursor = parseDate(cfg.rotationStart);
     const last = addDays(cursor, HORIZON_DAYS);
-    let turn = 0;
+    let turn = firstTurn(cfg);
 
     while (cursor <= last) {
       const dow = cursor.getDay();

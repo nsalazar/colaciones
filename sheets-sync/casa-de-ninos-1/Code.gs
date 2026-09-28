@@ -772,12 +772,30 @@ function expandClosuresMap(list) {
   return map;
 }
 
+/**
+ * La rotación es circular: en rotationStart parte el niño que sigue en
+ * Rotacion al último que llevó colación antes de esa fecha (según
+ * Historial). Si ese niño ya no está en la lista (ej. se fue del curso),
+ * se mira el anterior en Historial, y así. Sin Historial previo, parte el
+ * primero de la lista. Debe calzar con firstTurn() en app.js.
+ */
+function firstTurn(cfg) {
+  const prev = (cfg.history || [])
+    .filter(function (h) { return h.date < cfg.rotationStart; })
+    .sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+  for (let i = 0; i < prev.length; i++) {
+    const idx = cfg.kids.indexOf(prev[i].kid);
+    if (idx >= 0) return idx + 1;
+  }
+  return 0;
+}
+
 function buildIndexMap(cfg, closures) {
   const map = {};
   if (cfg.kids && cfg.kids.length) {
     let cursor = parseDateLocal(cfg.rotationStart);
     const last = addDays(cursor, 420);
-    let turn = 0;
+    let turn = firstTurn(cfg);
     while (cursor <= last) {
       const dow = cursor.getDay();
       const iso = toISO(cursor);

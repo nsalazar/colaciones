@@ -99,8 +99,11 @@ curso nuevo es agregar una entrada aquí + crear su carpeta en `data/` (ver
 }
 ```
 
-- **`rotationStart`**: fecha en la que le tocó al primer niño de `kids`. Desde
-  ahí el sitio recorre días hábiles y asigna en orden, saltándose `closures`.
+- **`rotationStart`**: fecha desde la que se calcula la rotación. La lista
+  `kids` es circular: ese día le toca al niño que sigue en `kids` al último
+  de `history` antes de esa fecha (si ese niño ya no está en `kids`, se usa
+  el anterior en `history`; sin `history`, parte `kids[0]`). Desde ahí el
+  sitio recorre días hábiles y asigna en orden, saltándose `closures`.
   `history` son asignaciones fijas para fechas pasadas (no se recalculan).
 - **`weekdays`**: `"1"`=lunes … `"5"`=viernes. Un día ausente = sin colación
   ese día de la semana.
