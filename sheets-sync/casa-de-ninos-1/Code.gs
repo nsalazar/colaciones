@@ -842,8 +842,9 @@ function tagsFor(contacts) {
 function readDisplayColumn(sheetName, headerName) {
   const sheet = SpreadsheetApp.getActive().getSheetByName(sheetName);
   if (!sheet) return [];
-  const values = sheet.getDataRange().getValues();
-  const display = sheet.getDataRange().getDisplayValues();
+  const range = sheet.getDataRange();
+  const values = withRetry(function () { return range.getValues(); }, 3, "leer " + sheetName);
+  const display = withRetry(function () { return range.getDisplayValues(); }, 3, "leer texto de " + sheetName);
   const col = values[2].indexOf(headerName);
   if (col < 0) return [];
   const result = [];
